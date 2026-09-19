@@ -1,0 +1,270 @@
+---
+title: "Enrichment API — Normalize and Enrich Banking Records"
+sidebarTitle: "Enrichment API"
+description: "POST /v1/enrich — submit raw banking records for semantic enrichment: normalization, taxonomy labeling, relationship resolution, and rule evaluation."
+---
+
+The Enrichment API is the primary ingestion point for transforming raw, system-specific banking records into semantically annotated JSON-LD documents aligned to the Banking Semantic Layer ontology. When you submit records, the platform applies your configured field mapping to translate source field names and values into ontology IRIs, evaluates any business rules associated with the mapping, resolves entity relationships, and returns enriched output ready for knowledge graph storage or downstream consumption. You can process records synchronously (ideal for real-time use cases) or asynchronously (ideal for bulk batch loads).
+
+## POST /v1/enrich
+
+Submits one or more raw records for semantic enrichment using a specified field mapping.
+
+**Required scope**: `write:enrich`
+
+### Request Body
+
+<ParamField body="source" type="string" required>
+  An identifier for the originating source system (e.g., `core_banking`, `card_processing`, `crm`). This value is recorded in lineage metadata and used to disambiguate records from different systems when they describe the same entity.
+</ParamField>
+
+<ParamField body="mappingId" type="string" required>
+  The ID of the field mapping configuration to apply. Mappings are created and managed in the dashboard or via the Mappings API. The mapping defines how source field names and values translate to ontology properties and taxonomy IRIs.
+</ParamField>
+
+<ParamField body="records" type="array" required>
+  An array of raw source record objects to enrich. Each object should match the source schema that the specified mapping was designed for. Maximum of **1,000 records** per synchronous request. For larger batches, use `"async": true`.
+</ParamField>
+
+<ParamField body="async" type="boolean" default="false">
+  When set to `true`, the request returns immediately with a job ID rather than waiting for enrichment to complete. Use async mode for batches larger than 100 records or when you do not need the enriched results inline. Poll the job status endpoint or receive a webhook callback when the job completes.
+</ParamField>
+
+<ParamField body="callbackUrl" type="string">
+  A webhook URL to receive a `POST` notification when an async enrichment job completes. The request body sent to this URL will contain the `jobId`, `status`, and a summary of results. Requires `"async": true`.
+</ParamField>
+
+<ParamField body="dryRun" type="boolean" default="false">
+  When set to `true`, the enrichment pipeline runs in full — applying the mapping, evaluating rules, and producing enriched output — but the results are **not persisted** to the knowledge graph. Use `dryRun` to validate a new mapping configuration without affecting production data.
+</ParamField>
+
+### Synchronous Request
+
+```bash
+curl -X POST https://api.bankingsemanticlayer.io/v1/enrich \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source": "core_banking",
+    "mappingId": "map-001",
+    "records": [
+      {
+        "acct_no": "1234567",
+        "bal_amt": 15000,
+        "ccy_cd": "USD",
+        "status_cd": "A",
+        "customer_id": "CUS-00123"
+      }
+    ]
+  }'
+```
+
+### Synchronous Response
+
+```json
+{
+  "data": {
+    "enriched": [
+      {
+        "@context": "https://ontology.bankingsl.io/v1/context.json",
+        "@type": "bsl:Account",
+        "bsl:accountNumber": "1234567",
+        "bsl:balance": 15000,
+        "bsl:currency": "bsl:USD",
+        "bsl:status": "bsl:Active",
+        "bsl:heldBy": {
+          "@id": "CUS-00123"
+        },
+        "_meta": {
+          "confidence": 0.99,
+          "enrichedAt": "2024-06-01T12:00:00Z",
+          "mappingId": "map-001",
+          "rulesApplied": [],
+          "lineageId": "lin_acc1234567_20240601"
+        }
+      }
+    ],
+    "summary": {
+      "total": 1,
+      "succeeded": 1,
+      "failed": 0
+    }
+  },
+  "meta": {
+    "requestId": "req_enrich_001",
+    "timestamp": "2024-06-01T12:00:00Z"
+  }
+}
+```
+
+### Async Request
+
+```bash
+curl -X POST https://api.bankingsemanticlayer.io/v1/enrich \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source": "core_banking",
+    "mappingId": "map-001",
+    "async": true,
+    "callbackUrl": "https://your-system.example.com/webhooks/bsl-enrichment",
+    "records": [ ... ]
+  }'
+```
+
+### Async Response
+
+```json
+{
+  "data": {
+    "jobId": "job_abc456",
+    "status": "queued",
+    "estimatedCompleteAt": "2024-06-01T12:05:00Z"
+  },
+  "meta": {
+    "requestId": "req_enrich_002",
+    "timestamp": "2024-06-01T12:00:00Z"
+  }
+}
+```
+
+---
+
+## GET /v1/enrich/jobs/{jobId}
+
+Retrieves the current status of an asynchronous enrichment job. Poll this endpoint to track progress, or rely on the `callbackUrl` webhook to avoid polling.
+
+**Required scope**: `write:enrich`
+
+### Path Parameters
+
+<ParamField path="jobId" type="string" required>
+  The job ID returned by the `POST /v1/enrich` async request.
+</ParamField>
+
+### Request
+
+```bash
+curl https://api.bankingsemanticlayer.io/v1/enrich/jobs/job_abc456 \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+### Response
+
+```json
+{
+  "data": {
+    "jobId": "job_abc456",
+    "status": "completed",
+    "createdAt": "2024-06-01T12:00:00Z",
+    "completedAt": "2024-06-01T12:04:37Z",
+    "summary": {
+      "total": 500,
+      "succeeded": 498,
+      "failed": 2
+    },
+    "failedRecords": [
+      {
+        "index": 47,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Required property bsl:accountNumber is missing"
+        }
+      },
+      {
+        "index": 312,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Value 'XX' does not match taxonomy bsl:CurrencyCode"
+        }
+      }
+    ]
+  },
+  "meta": {
+    "requestId": "req_job_001",
+    "timestamp": "2024-06-01T12:10:00Z"
+  }
+}
+```
+
+Job `status` values are:
+
+| Status | Description |
+|--------|-------------|
+| `queued` | Job has been accepted and is waiting to be processed |
+| `processing` | Job is actively being enriched |
+| `completed` | All records have been processed (some may have failed validation) |
+| `failed` | The job encountered a fatal error and could not complete |
+
+---
+
+## Enrichment Metadata
+
+Every enriched record includes a `_meta` object containing provenance and audit information. These fields are automatically populated by the platform — you do not need to supply them in the source records.
+
+<ResponseField name="_meta.confidence" type="float (0.0–1.0)">
+  An enrichment confidence score indicating how complete and unambiguous the mapping was for this record. A score of `1.0` means all required properties were mapped with no ambiguity. Lower scores indicate that some fields were derived by inference or that optional required properties were absent.
+</ResponseField>
+
+<ResponseField name="_meta.enrichedAt" type="string (ISO 8601 datetime)">
+  The UTC timestamp at which this record was enriched by the pipeline.
+</ResponseField>
+
+<ResponseField name="_meta.mappingId" type="string">
+  The ID of the field mapping that was applied to produce this enriched record. Useful for auditing which mapping version was active when enrichment occurred.
+</ResponseField>
+
+<ResponseField name="_meta.rulesApplied" type="array of strings">
+  An array of business rule IDs that were evaluated and matched during enrichment. Rules may add derived properties, set taxonomy labels, or attach risk flags. An empty array means no rules matched.
+</ResponseField>
+
+<ResponseField name="_meta.lineageId" type="string">
+  A unique identifier for the lineage record associated with this enriched entity instance. Use this ID with the `GET /v1/lineage/{entityId}` endpoint to retrieve the full transformation history.
+</ResponseField>
+
+---
+
+## Error Handling and Partial Failures
+
+The enrichment pipeline processes each record independently. When you submit a batch of records, some records may fail ontology validation while others succeed. The API uses **partial failure semantics** — it does not reject the entire batch because one record is invalid.
+
+In a synchronous response, failed records appear in a `failed` array alongside the `enriched` array:
+
+```json
+{
+  "data": {
+    "enriched": [
+      { "@type": "bsl:Account", "bsl:accountNumber": "1234567", ... }
+    ],
+    "failed": [
+      {
+        "index": 1,
+        "sourceRecord": { "acct_no": null, "bal_amt": 500, "ccy_cd": "USD" },
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "Required property bsl:accountNumber is missing (mapped from acct_no)"
+        }
+      }
+    ],
+    "summary": {
+      "total": 2,
+      "succeeded": 1,
+      "failed": 1
+    }
+  },
+  "meta": { "requestId": "req_enrich_003" }
+}
+```
+
+<Warning>
+  A `200 OK` HTTP status does not guarantee that all records were enriched successfully. Always check `summary.failed` in the response to detect partial failures. A non-zero `failed` count means one or more records were rejected by ontology validation and were not persisted to the knowledge graph.
+</Warning>
+
+Common validation failure reasons:
+
+- A required property (marked `required: true` in the entity definition) is missing from the source record.
+- A value does not match the expected taxonomy (e.g., an unrecognized currency code).
+- A relationship reference points to an entity IRI that does not exist in the graph.
+- A numeric value falls outside the allowed range defined by a business rule.
+
+To diagnose mapping issues without affecting production data, use `"dryRun": true` while iterating on your mapping configuration.

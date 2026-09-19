@@ -1,0 +1,158 @@
+---
+title: "Ontology Entities: Banking Data Objects Defined"
+sidebarTitle: "Entities"
+description: "Reference for all canonical entity types in the Banking Semantic Layer ontology, including Customer, Account, Transaction, and Product."
+---
+
+Entities are the primary building blocks of the Banking Semantic Layer ontology. Each entity represents a canonical object type in the banking domain — a stable, formally defined class with a resolvable IRI, a declared set of typed properties, and explicit alignment to FIBO base classes. When you ingest data through the platform, every record is mapped to one of these entity types, enriched with ontology-aware metadata, and made queryable via the graph API. Understanding the entity model is the foundation for working effectively with enrichment, querying, and compliance features.
+
+## Core Entity Types
+
+The ontology defines eight top-level entity classes. The four primary entities — Customer, Account, Transaction, and Product — carry the richest property sets and are covered in detail below. The remaining four provide structural scaffolding for the broader knowledge graph.
+
+| Entity Name | IRI | Description |
+|-------------|-----|-------------|
+| Customer | `bsl:Customer` | An individual or organization holding a banking relationship |
+| Account | `bsl:Account` | A financial account held by a customer |
+| Transaction | `bsl:Transaction` | A financial operation against an account |
+| Product | `bsl:Product` | A financial product offered by the institution |
+| Party | `bsl:Party` | A generic party (person or organization) |
+| Institution | `bsl:Institution` | A financial institution |
+| Branch | `bsl:Branch` | A physical or virtual branch location |
+| Currency | `bsl:Currency` | An ISO 4217 currency |
+
+---
+
+## Customer
+
+A `bsl:Customer` represents an individual person or a legal organization that holds a direct banking relationship with your institution. Customers are the root nodes of the knowledge graph — all accounts, products, and transactions trace back to at least one customer. The `bsl:Customer` class is declared as a subclass of both `fibo-fnd:Party` and `fibo-fbc:BankCustomer`, giving it full FIBO lineage.
+
+### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `bsl:customerId` | `xsd:string` | Unique identifier assigned by the institution |
+| `bsl:fullName` | `xsd:string` | Full legal name of the customer |
+| `bsl:dateOfBirth` | `xsd:date` | Date of birth (individuals only) |
+| `bsl:kycStatus` | `bsl:KYCStatus` | Current KYC verification status |
+| `bsl:riskTier` | `bsl:RiskTier` | Risk classification tier assigned by the platform |
+| `bsl:holds` | `bsl:Account` | Accounts held by this customer (one-to-many) |
+
+### Example JSON-LD
+
+```json
+{
+  "@context": "https://ontology.bankingsl.io/v1/context.json",
+  "@type": "bsl:Customer",
+  "bsl:customerId": "CUS-00123",
+  "bsl:fullName": "Jane Smith",
+  "bsl:dateOfBirth": "1985-03-14",
+  "bsl:kycStatus": "bsl:Verified",
+  "bsl:riskTier": "bsl:Low"
+}
+```
+
+---
+
+## Account
+
+A `bsl:Account` represents a financial account opened by a customer at your institution. Accounts are the primary ledger objects in the graph — transactions flow through them, products are associated with them, and branch relationships are anchored to them. `bsl:Account` is a subclass of `fibo-fbc:Account`.
+
+### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `bsl:accountNumber` | `xsd:string` | Unique account number |
+| `bsl:accountType` | `bsl:AccountType` | Classification of the account (e.g., Savings, Checking) |
+| `bsl:balance` | `xsd:decimal` | Current ledger balance |
+| `bsl:currency` | `bsl:Currency` | ISO 4217 currency of the account |
+| `bsl:status` | `bsl:AccountStatus` | Current operational status of the account |
+| `bsl:openedDate` | `xsd:date` | Date the account was opened |
+| `bsl:heldBy` | `bsl:Customer` | The customer who owns this account (inverse of `bsl:holds`) |
+
+### Example JSON-LD
+
+```json
+{
+  "@context": "https://ontology.bankingsl.io/v1/context.json",
+  "@type": "bsl:Account",
+  "bsl:accountNumber": "ACC-9900221",
+  "bsl:accountType": "bsl:Savings",
+  "bsl:balance": 14250.75,
+  "bsl:currency": "bsl:USD",
+  "bsl:status": "bsl:Active",
+  "bsl:openedDate": "2019-07-01",
+  "bsl:heldBy": {
+    "@type": "bsl:Customer",
+    "bsl:customerId": "CUS-00123"
+  }
+}
+```
+
+---
+
+## Transaction
+
+A `bsl:Transaction` represents a single financial operation applied to one or more accounts — a debit, credit, transfer, fee assessment, or interest posting. Transactions are the most high-volume entity type and carry the richest analytical metadata, including MCC codes for merchant classification and currency details for cross-border reporting. `bsl:Transaction` is a subclass of `fibo-fbc:Transaction`.
+
+### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `bsl:transactionId` | `xsd:string` | Unique transaction identifier |
+| `bsl:amount` | `xsd:decimal` | Monetary amount of the transaction |
+| `bsl:currency` | `bsl:Currency` | ISO 4217 currency of the transaction |
+| `bsl:timestamp` | `xsd:dateTime` | Date and time when the transaction occurred |
+| `bsl:transactionType` | `bsl:TransactionType` | Classification of the transaction |
+| `bsl:mccCode` | `xsd:string` | ISO 18245 Merchant Category Code |
+| `bsl:creditAccount` | `bsl:Account` | The account receiving the credit leg |
+| `bsl:debitAccount` | `bsl:Account` | The account bearing the debit leg |
+
+### Example JSON-LD
+
+```json
+{
+  "@context": "https://ontology.bankingsl.io/v1/context.json",
+  "@type": "bsl:Transaction",
+  "bsl:transactionId": "TXN-20240315-884421",
+  "bsl:amount": 250.00,
+  "bsl:currency": "bsl:USD",
+  "bsl:timestamp": "2024-03-15T14:32:00Z",
+  "bsl:transactionType": "bsl:Debit",
+  "bsl:mccCode": "5411",
+  "bsl:debitAccount": {
+    "@type": "bsl:Account",
+    "bsl:accountNumber": "ACC-9900221"
+  }
+}
+```
+
+---
+
+## Product
+
+A `bsl:Product` represents a financial product or service that your institution offers to customers. Products span the full range of banking offerings — deposit products, lending facilities, payment cards, investment vehicles, and insurance wrappers. `bsl:Product` is a subclass of `fibo-fbc:FinancialProduct`.
+
+### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `bsl:productId` | `xsd:string` | Unique product identifier |
+| `bsl:productName` | `xsd:string` | Human-readable product name |
+| `bsl:productFamily` | `bsl:ProductFamily` | High-level product family classification |
+| `bsl:interestRate` | `xsd:decimal` | Nominal annual interest rate (where applicable) |
+| `bsl:currency` | `bsl:Currency` | Base currency of the product |
+
+### Example JSON-LD
+
+```json
+{
+  "@context": "https://ontology.bankingsl.io/v1/context.json",
+  "@type": "bsl:Product",
+  "bsl:productId": "PRD-SAV-PRIME",
+  "bsl:productName": "Prime Savings Account",
+  "bsl:productFamily": "bsl:Deposits",
+  "bsl:interestRate": 4.75,
+  "bsl:currency": "bsl:USD"
+}
+```

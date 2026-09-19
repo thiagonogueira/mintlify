@@ -1,0 +1,145 @@
+---
+title: "Enrich Banking Records with Semantic Context"
+sidebarTitle: "Enrichment"
+description: "Run raw banking records through the enrichment pipeline to normalize fields, apply taxonomy labels, resolve relationships, and flag compliance issues."
+---
+
+Enrichment transforms raw, source-system records into semantically rich, ontology-aligned entities that your analytics, compliance, and application teams can use directly. When a record passes through the enrichment pipeline, the platform normalises field values, resolves coded values to taxonomy terms, links related entities by traversing the knowledge graph, and evaluates any configured business rules — producing a structured JSON-LD output that carries both the enriched data and the metadata needed to understand how it was produced.
+
+## Enrichment Pipeline
+
+Every record you submit follows the same ordered pipeline:
+
+```
+Raw Record → Field Normalization → Taxonomy Mapping → Relationship Resolution → Rule Evaluation → Enriched Record
+```
+
+Each stage builds on the previous one. Field normalisation applies your mapping definition to translate source field names and data types. Taxonomy mapping resolves coded values — such as product codes or status flags — to their canonical `bsl:` taxonomy URIs. Relationship resolution follows foreign-key references to link the record to related entities already in the knowledge graph. Rule evaluation runs the record against your configured compliance and business rules and flags any violations in the output metadata.
+
+<Steps>
+  <Step title="Prepare your records">
+    Structure your input as a JSON object with three top-level keys: `source` (your registered source system name), `mappingId` (the activated mapping you want to apply), and `records` (an array of raw source objects).
+
+    ```json
+    {
+      "source": "core_banking",
+      "mappingId": "map-001",
+      "records": [
+        {
+          "acct_no": "1234567",
+          "acct_type_cd": "SAV",
+          "bal_amt": 15000,
+          "ccy_cd": "USD",
+          "status_cd": "A",
+          "customer_id": "CUS-00123"
+        }
+      ]
+    }
+    ```
+
+    Save this as `records.json`. Each object in the `records` array must match the source field names declared in your mapping definition. Fields not covered by the mapping are passed through unchanged in a `_unmapped` block on the output, so you will not lose data.
+  </Step>
+
+  <Step title="Call the enrichment endpoint">
+    POST your prepared records to the `/v1/enrich` endpoint. For synchronous enrichment of small batches the response is returned inline in the HTTP response body.
+
+    ```bash
+    curl -X POST https://api.bankingsemanticlayer.io/v1/enrich \
+      -H "Authorization: Bearer YOUR_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d @records.json
+    ```
+
+    The platform processes the records in order. If any record in the batch fails validation the others are still processed; failures are reported individually in the response alongside the successful outputs.
+  </Step>
+
+  <Step title="Receive enriched output">
+    The platform returns a JSON-LD document for each enriched record. The `@context` declaration points to the canonical Banking Semantic Layer context, making the output directly interoperable with any RDF or JSON-LD aware system. Enriched field values use their fully qualified ontology URIs, and the `_meta` block records provenance and quality information.
+
+    ```json
+    {
+      "@context": "https://ontology.bankingsl.io/v1/context.json",
+      "@type": "bsl:Account",
+      "bsl:accountNumber": "1234567",
+      "bsl:accountType": "bsl:SavingsAccount",
+      "bsl:balance": 15000,
+      "bsl:currency": "bsl:USD",
+      "bsl:status": "bsl:Active",
+      "bsl:heldBy": { "@id": "CUS-00123", "@type": "bsl:Customer" },
+      "_meta": {
+        "enrichedAt": "2024-06-01T12:00:00Z",
+        "mappingId": "map-001",
+        "rulesApplied": [],
+        "confidence": 0.99
+      }
+    }
+    ```
+
+    The `bsl:heldBy` property is populated because the relationship mapping in `map-001` resolved the `customer_id` foreign key to a `bsl:Customer` node already present in the graph.
+  </Step>
+
+  <Step title="Handle rule violations">
+    When a record triggers one or more configured compliance or business rules, the violation details appear in the `rulesApplied` array inside `_meta`. Each entry identifies the rule, its severity, and the label that should be applied to the record downstream.
+
+    ```json
+    {
+      "_meta": {
+        "rulesApplied": [
+          {
+            "ruleId": "rule:AML-001",
+            "triggered": true,
+            "severity": "high",
+            "label": "CTRRequired"
+          }
+        ]
+      }
+    }
+    ```
+
+    Your application should inspect `rulesApplied` after every enrichment call. Records with `"severity": "high"` or `"severity": "critical"` rules typically require immediate action — such as generating a Currency Transaction Report or placing an account on hold — and should be routed to your compliance workflow before further processing.
+  </Step>
+</Steps>
+
+## Batch Enrichment
+
+You can submit up to **1,000 records per request** in the `records` array for synchronous enrichment. For batches that approach this limit, or when you need to enrich very large datasets on a schedule, use the asynchronous batch mode by adding `"async": true` to your request body.
+
+```json
+{
+  "source": "core_banking",
+  "mappingId": "map-001",
+  "async": true,
+  "records": [ ... ]
+}
+```
+
+An async request returns immediately with a `jobId` and a `status` of `"queued"`. Poll the job status endpoint to track progress:
+
+```bash
+curl https://api.bankingsemanticlayer.io/v1/jobs/JOB_ID \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+When `status` reaches `"completed"`, fetch the output from the URL provided in the `outputUrl` field of the job response. Output files for large async jobs are available for 24 hours before automatic expiry.
+
+## Stream Enrichment
+
+For continuous, event-driven enrichment — such as enriching every transaction as it is posted — you can register a webhook callback URL on your enrichment job. The platform calls your endpoint with the enriched output as soon as each record is processed, rather than waiting for the full batch to complete.
+
+Add a `"callbackUrl"` key to any async enrichment request:
+
+```json
+{
+  "source": "core_banking",
+  "mappingId": "map-001",
+  "async": true,
+  "callbackUrl": "https://your-system.com/webhook/bsl/enrichment",
+  "records": [ ... ]
+}
+```
+
+The platform sends a POST request to your callback URL for each enriched record. The payload follows the same JSON-LD structure as the synchronous response. Your endpoint must return a `200 OK` within 10 seconds; the platform retries up to three times with exponential back-off if it does not receive a successful response.
+
+<Tip>
+  Pay close attention to the `confidence` score in the `_meta` block. A score below `0.80` indicates that one or more field mappings could not be fully resolved — for example, a taxonomy lookup that found no matching term, or a relationship reference that could not be joined to an existing graph node. Records with low confidence scores are still returned, but you should review them to determine whether the source data or the mapping definition needs to be updated.
+</Tip>

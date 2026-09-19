@@ -1,0 +1,114 @@
+---
+title: "Core Concepts of the Banking Semantic Layer"
+sidebarTitle: "Core Concepts"
+description: "Understand the foundational concepts: ontologies, entities, relationships, taxonomies, semantic mapping, and enrichment pipelines."
+---
+
+The Banking Semantic Layer is built on a small set of interconnected concepts that, taken together, give you a consistent and queryable model of your financial data. Understanding these concepts will help you design better mappings, write more powerful queries, and reason about how your data flows through the platform. This page introduces each concept, explains what role it plays, and shows how they connect to each other.
+
+<Info>
+  Throughout the platform, API responses, and this documentation, you will see the `bsl:` prefix used on property and type names — for example, `bsl:Account` or `bsl:balance`. This is the **Banking Semantic Layer namespace**, which uniquely identifies every concept defined in the platform's ontology. When you see `bsl:`, you are looking at a canonical, versioned definition rather than a raw source field.
+</Info>
+
+## Ontology
+
+An ontology is a formal, machine-readable model of a domain — in this case, the domain of banking and financial services. It defines what things exist (entities), what properties they have, how they relate to each other, and how they are classified. Unlike a database schema, which describes how data is stored, an ontology describes what data *means*.
+
+The Banking Semantic Layer ontology covers the core concepts every financial institution works with: customers, accounts, transactions, products, risk classifications, and regulatory categories. Each concept is defined precisely — with a unique identifier, a human-readable label, a formal type hierarchy, and a set of allowed properties and relationships.
+
+The ontology is aligned with **FIBO** (Financial Industry Business Ontology), the industry-standard ontology for financial concepts maintained by the EDM Council. This alignment means your canonical data maps naturally to regulatory reporting schemas, interbank data exchange formats, and any other FIBO-aware system your organization works with. The ontology is versioned, so you can evolve definitions over time without breaking consumers tied to an earlier version.
+
+## Entities
+
+Entities are the primary objects modeled in the ontology. They represent the real-world things that banking operations revolve around. Every source record you enrich through the platform is resolved to one of these canonical entity types.
+
+| Entity | `bsl:` Type | Description |
+|---|---|---|
+| Customer | `bsl:Customer` | An individual or organization that holds a relationship with the financial institution. Includes identity attributes, KYC status, and risk tier. |
+| Account | `bsl:Account` | A financial account held by a customer — savings, current, loan, credit, or investment. Carries balance, currency, status, and account type. |
+| Transaction | `bsl:Transaction` | A discrete financial event recorded against an account — a debit, credit, transfer, or fee. Carries amount, timestamp, category, and MCC code. |
+| Product | `bsl:Product` | A financial product offered by the institution — a mortgage, savings product, credit card, or insurance wrapper. Connects to accounts and customer eligibility rules. |
+
+Each entity type has a defined set of mandatory and optional properties. When you enrich a record, the platform validates that all mandatory properties are present after mapping and raises a structured error if any are missing.
+
+## Relationships
+
+Relationships describe how entities connect to each other. In the ontology, relationships are expressed as **semantic predicates** — typed, directional links between two entity instances. Predicates are first-class citizens of the model, not just foreign-key columns, which means you can traverse them in queries, infer new facts from them, and reason about chains of relationships.
+
+The core predicates in the Banking Semantic Layer are:
+
+- `bsl:holds` — A `bsl:Customer` *holds* a `bsl:Account`. This is the primary ownership relationship.
+- `bsl:hasTransaction` — A `bsl:Account` *has* a `bsl:Transaction`. Links every financial event to the account it occurred on.
+- `bsl:subscribedTo` — A `bsl:Customer` *is subscribed to* a `bsl:Product`. Records product uptake and eligibility.
+- `bsl:backedBy` — A `bsl:Account` *is backed by* a `bsl:Product`. Connects account instances to the product definition that governs them.
+
+Because predicates carry type information, the query engine can traverse multi-hop relationships in a single SPARQL query. For example, you can ask "give me all transactions on accounts held by customers with a KYC risk tier of HIGH" without writing any join logic — the relationships encode that path.
+
+## Taxonomies
+
+Taxonomies are hierarchical classification trees applied to entities and transactions at enrichment time. They provide consistent, machine-readable labels that make it possible to aggregate, filter, and report across data from different source systems using a single controlled vocabulary.
+
+The Banking Semantic Layer ships with four built-in taxonomy families:
+
+- **Basel III Risk Classes** — classifies exposures and accounts by the risk-weighting categories defined in the Basel III accord. Used for regulatory capital reporting.
+- **MCC Codes** — the ISO 18245 Merchant Category Code taxonomy applied to transaction records. Enables consistent transaction categorization regardless of which payment processor generated the record.
+- **KYC Risk Tiers** — a three-level hierarchy (LOW / MEDIUM / HIGH) derived from your KYC assessment rules. Applied to customer entities at enrichment time and updated when underlying assessments change.
+- **Product Families** — a configurable hierarchy of product types (e.g., Retail Banking → Deposits → Savings → Fixed-Rate Savings). You can extend the default hierarchy with institution-specific product categories.
+
+Taxonomy labels are attached to enriched output as `bsl:` typed properties, so they are queryable in SPARQL just like any other attribute. You can also use the Taxonomy Management API to inspect the full hierarchy, add custom terms, and map source system codes to canonical taxonomy nodes.
+
+## Semantic Mapping
+
+Semantic mapping is the configuration layer that tells the platform how to translate a raw source record into canonical ontology properties. You define one mapping configuration per source system, and the platform applies it every time a record from that system passes through the enrichment pipeline.
+
+A mapping configuration specifies the source system name, the target entity type, and a list of field mappings — each pairing a source field name with an ontology property:
+
+```json
+{
+  "sourceSystem": "core_banking",
+  "entityType": "Account",
+  "fieldMappings": [
+    { "sourceField": "acct_no",  "ontologyProperty": "bsl:accountNumber" },
+    { "sourceField": "bal",      "ontologyProperty": "bsl:balance" },
+    { "sourceField": "ccy",      "ontologyProperty": "bsl:currency" },
+    { "sourceField": "acct_typ", "ontologyProperty": "bsl:accountType" },
+    { "sourceField": "cust_ref", "ontologyProperty": "bsl:heldBy" }
+  ]
+}
+```
+
+Beyond simple field renaming, the mapping layer supports:
+
+- **Type coercion** — automatically converts source values to the correct ontology property type (e.g., a string `"10000"` to a numeric `bsl:balance`).
+- **Unit normalization** — converts monetary amounts stored in minor units (cents) to the canonical decimal representation.
+- **Identifier resolution** — when a source field contains a foreign key (e.g., `cust_ref`), the platform resolves it to a `bsl:Customer` entity and creates the appropriate relationship predicate.
+- **Constant injection** — you can hard-code values for properties that don't exist in the source (e.g., setting `bsl:dataClassification` to `"INTERNAL"` for all records from a given system).
+
+Mappings are versioned. When you update a mapping, the platform records which version was active at enrichment time, preserving full lineage even as your configuration evolves.
+
+## Enrichment
+
+Enrichment is the process of passing raw source records through the semantic layer to produce standardized, linked, taxonomy-labeled output. It is the core operation of the platform — everything else (mappings, ontology, taxonomies) exists to make enrichment produce accurate, consistent results.
+
+When you submit a batch of records for enrichment, the platform:
+
+1. Looks up the mapping configuration for the specified source system.
+2. Applies field mappings, type coercion, and unit normalization to each record.
+3. Resolves entity relationships by looking up referenced identifiers in the canonical store.
+4. Applies taxonomy classifications based on entity attributes (account type, transaction MCC code, customer KYC assessment).
+5. Validates the enriched record against the ontology schema — confirming that all mandatory properties are present and that property values match their defined types.
+6. Writes the enriched record to the canonical store and returns it in the API response.
+
+You can run enrichment synchronously for small batches (up to 500 records per request) or asynchronously for large bulk loads. The Enrichment API also supports streaming ingestion for real-time pipelines.
+
+## Lineage
+
+Lineage is the complete provenance record for every entity and every transformation in the platform. Every time a record is enriched, updated, or re-classified, the platform writes a lineage event that captures what changed, which mapping version was applied, which source system the data came from, and when the transformation occurred.
+
+Lineage records are immutable and append-only. You can query the full history of any entity — seeing every value it has ever held, when each value was set, and which source record triggered the change. This makes it straightforward to answer the kinds of questions auditors and regulators frequently ask:
+
+- "What was the balance on account ACC-001 as of the 31st of March?"
+- "Why did this customer's KYC risk tier change from MEDIUM to HIGH?"
+- "Which source system field does this reported balance trace back to?"
+
+The Lineage API exposes entity history as a time-ordered event stream. You can also subscribe to lineage events via webhook to trigger downstream processes whenever a specific entity changes.

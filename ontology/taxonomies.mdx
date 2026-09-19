@@ -1,0 +1,92 @@
+---
+title: "Taxonomy Management for Banking Classifications"
+sidebarTitle: "Taxonomies"
+description: "Manage hierarchical classification taxonomies for banking data: risk tiers, product families, MCC codes, regulatory categories, and KYC status."
+---
+
+Taxonomies are the controlled vocabularies of the Banking Semantic Layer ontology. Where entities define the objects in your data model and relationships define how those objects connect, taxonomies define the permissible values for every enumerated property — account types, transaction classifications, KYC statuses, risk tiers, and more. Each taxonomy term carries a stable, resolvable IRI so that classifications remain consistent and machine-readable across every system that consumes your data. Taxonomies also support hierarchical nesting, enabling you to query at multiple levels of specificity: you can ask for all `bsl:DepositAccount` instances and automatically include every Savings, Checking, and Money Market account without listing each subtype explicitly.
+
+## Built-in Taxonomies
+
+The platform ships with the following built-in taxonomies, all aligned to industry standards and FIBO classifications. These vocabularies are available immediately in every workspace.
+
+| Taxonomy | IRI | Description | Term Count |
+|----------|-----|-------------|------------|
+| Account Types | `bsl:AccountType` | Savings, Checking, Credit, Loan, Investment | 12 |
+| Transaction Types | `bsl:TransactionType` | Debit, Credit, Transfer, Fee, Interest | 18 |
+| KYC Status | `bsl:KYCStatus` | Pending, InProgress, Verified, Failed, Expired | 5 |
+| Risk Tiers | `bsl:RiskTier` | Low, Medium, High, Critical | 4 |
+| Product Families | `bsl:ProductFamily` | Deposits, Loans, Cards, Investments, Insurance | 8 |
+| MCC Codes | `bsl:MCCCode` | Full ISO 18245 merchant category codes | 700+ |
+| Regulatory Categories | `bsl:RegulatoryCategory` | Basel III, AML, GDPR, PSD2, MiFID II | 25 |
+
+## Term Structure
+
+Every taxonomy term in the platform follows a consistent structure, whether it belongs to a built-in vocabulary or a custom one you define. Terms are stored as named individuals in the ontology graph, which means they are fully dereferenceable, linkable, and queryable alongside your entity data.
+
+The JSON representation of a taxonomy term looks like this:
+
+```json
+{
+  "@type": "bsl:TaxonomyTerm",
+  "bsl:termId": "bsl:Savings",
+  "bsl:label": "Savings Account",
+  "bsl:broader": "bsl:DepositAccount",
+  "bsl:definition": "An interest-bearing deposit account held at a regulated institution, typically offering a lower yield in exchange for liquidity and deposit insurance coverage.",
+  "bsl:regulatory": ["FDIC-insured"]
+}
+```
+
+The key fields in a term record are:
+
+- **`bsl:termId`** — The stable IRI for this term. Use this value in property assertions on entities.
+- **`bsl:label`** — A human-readable display name for the term.
+- **`bsl:broader`** — The parent term in the taxonomy hierarchy (based on SKOS `skos:broader` semantics).
+- **`bsl:definition`** — A plain-language definition suitable for documentation and data dictionaries.
+- **`bsl:regulatory`** — Optional array of regulatory flags or scheme labels associated with this term.
+
+## Hierarchical Navigation
+
+Taxonomies support multi-level hierarchies using SKOS-style broader/narrower relationships. This lets you write queries and filters at the level of specificity your use case requires, without enumerating every leaf-level term.
+
+For example, the `bsl:AccountType` hierarchy for deposit products looks like this:
+
+```text
+bsl:AccountType
+└── bsl:DepositAccount
+    ├── bsl:SavingsAccount
+    │   ├── bsl:HighYieldSavings
+    │   └── bsl:MoneyMarket
+    └── bsl:CheckingAccount
+        ├── bsl:BasicChecking
+        └── bsl:PremiumChecking
+```
+
+When you filter for `bsl:DepositAccount` in a query, the platform automatically expands the filter to include all narrower terms in the hierarchy. You can disable this behavior and query only the exact term by appending `?exact=true` to taxonomy filter parameters.
+
+## Custom Taxonomies
+
+You can extend the ontology with organization-specific taxonomies to capture classifications that are internal to your institution and not covered by the built-in vocabulary. Custom taxonomies live in your own namespace (e.g., `internal:`) and can be referenced anywhere a built-in taxonomy term can be used — in entity properties, rules, and API filters.
+
+To create a custom taxonomy, send a `POST` request to the taxonomies endpoint:
+
+```bash
+curl -X POST https://api.bankingsemanticlayer.io/v1/taxonomies \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "internal:ProductSegment",
+    "label": "Product Segment",
+    "terms": [
+      { "id": "internal:Retail", "label": "Retail" },
+      { "id": "internal:SME", "label": "Small & Medium Enterprise" },
+      { "id": "internal:Corporate", "label": "Corporate" }
+    ]
+  }'
+```
+
+Once created, you can reference custom taxonomy terms in entity enrichment mappings, rule conditions, and SPARQL queries exactly as you would a built-in term. You can also add hierarchical structure to custom taxonomies by including a `"broader"` field on any term.
+
+<Warning>
+  Do not modify or delete built-in FIBO-aligned taxonomies (any term with the `bsl:` prefix). These vocabularies underpin compliance rule evaluation, FIBO alignment exports, and cross-workspace data sharing. Altering them will break downstream enrichment pipelines and may cause compliance rule failures. If a built-in term does not fit your use case, create a custom taxonomy term in your own namespace and map it to the built-in term using `bsl:exactMatch` or `bsl:closeMatch`.
+</Warning>

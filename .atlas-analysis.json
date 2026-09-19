@@ -1,13 +1,11 @@
 {
-  "$schema": "https://mintlify.com/docs.json",
+  "projectType": "data-platform",
+  "projectName": "Banking Semantic Layer",
+  "projectDescription": "A semantic and ontology layer that standardizes, enriches, and connects banking data concepts—enabling consistent definitions, relationships, and intelligent querying across financial systems.",
   "theme": "luma",
-  "name": "Banking Semantic Layer",
-  "colors": {
-    "primary": "#ef7025",
-    "light": "#eec9bc",
-    "dark": "#4fa1ab"
-  },
-  "favicon": "/favicon.svg",
+  "primaryColor": "#ef7025",
+  "lightColor": "#eec9bc",
+  "darkColor": "#4fa1ab",
   "navigation": {
     "tabs": [
       {
@@ -82,20 +80,25 @@
       }
     ]
   },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:support@bankingsemanticlayer.io"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Get Started",
-      "href": "/quickstart"
-    }
-  },
-  "footer": {
-    "socials": {}
-  }
+  "keyFeatures": [
+    "Canonical banking entity definitions (customers, accounts, transactions, products)",
+    "Ontology-driven relationship mapping across financial data sources",
+    "Taxonomy management for regulatory and compliance classifications",
+    "Semantic query engine for natural-language and SPARQL-style queries",
+    "Data enrichment and normalization pipelines",
+    "Integration connectors for core banking systems and data warehouses",
+    "Rules engine for business logic and data governance",
+    "Audit trail and lineage tracking for compliance"
+  ],
+  "publicApiSurface": [
+    "GET /entities — list all canonical entity types",
+    "GET /entities/{id} — retrieve entity definition and attributes",
+    "GET /relationships — list semantic relationships between entities",
+    "POST /query — execute semantic queries against the ontology",
+    "POST /enrich — enrich raw banking records against the semantic model",
+    "GET /taxonomies — list classification taxonomies",
+    "GET /taxonomies/{id}/terms — list terms within a taxonomy",
+    "POST /mappings — define field mappings from source systems",
+    "GET /lineage/{entityId} — retrieve data lineage for an entity"
+  ]
 }

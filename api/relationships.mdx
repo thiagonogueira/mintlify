@@ -1,0 +1,218 @@
+---
+title: "Relationships API — Semantic Predicates Between Entities"
+sidebarTitle: "Relationships API"
+description: "GET /v1/relationships — list all semantic predicates connecting banking entities, including domain, range, and inverse properties."
+---
+
+The Relationships API exposes the semantic predicates that connect entity types in the Banking Semantic Layer knowledge graph. A relationship (or predicate) is the edge between two entity nodes — it has a direction, a domain (the entity type at the source), a range (the entity type at the target), and often an inverse predicate representing the same relationship in reverse. Understanding the available relationships is essential for writing SPARQL queries, designing field mappings that link entities across source systems, and building graph traversal logic.
+
+## GET /v1/relationships
+
+Returns a paginated list of all semantic predicates defined in the ontology, optionally filtered by the domain or range entity type.
+
+**Required scope**: `read:entities`
+
+### Query Parameters
+
+<ParamField query="domain" type="string">
+  Filter results to predicates whose domain (subject entity type) matches this IRI. Pass URL-encoded IRIs, e.g., `bsl%3ACustomer` to retrieve all predicates that originate from a `Customer` entity.
+</ParamField>
+
+<ParamField query="range" type="string">
+  Filter results to predicates whose range (object entity type) matches this IRI. For example, `bsl%3AAccount` returns all predicates that point to an `Account`.
+</ParamField>
+
+<ParamField query="limit" type="integer" default="20">
+  Number of predicates to return per page. Maximum value is `100`.
+</ParamField>
+
+<ParamField query="offset" type="integer" default="0">
+  Zero-based pagination offset.
+</ParamField>
+
+### Request
+
+```bash
+curl 'https://api.bankingsemanticlayer.io/v1/relationships?domain=bsl%3ACustomer' \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+### Response
+
+```json
+{
+  "data": [
+    {
+      "id": "bsl:holds",
+      "label": "holds",
+      "domain": "bsl:Customer",
+      "range": "bsl:Account",
+      "inverse": "bsl:heldBy",
+      "description": "A customer holds an account",
+      "cardinality": "one-to-many"
+    },
+    {
+      "id": "bsl:initiates",
+      "label": "initiates",
+      "domain": "bsl:Customer",
+      "range": "bsl:Transaction",
+      "inverse": "bsl:initiatedBy",
+      "description": "A customer initiates a transaction",
+      "cardinality": "one-to-many"
+    },
+    {
+      "id": "bsl:hasKYCRecord",
+      "label": "hasKYCRecord",
+      "domain": "bsl:Customer",
+      "range": "bsl:KYCRecord",
+      "inverse": "bsl:kycRecordOf",
+      "description": "A customer has an associated KYC record",
+      "cardinality": "one-to-one"
+    }
+  ],
+  "meta": {
+    "total": 12,
+    "limit": 20,
+    "offset": 0,
+    "requestId": "req_rel_001",
+    "timestamp": "2024-06-01T12:00:00Z"
+  }
+}
+```
+
+---
+
+## GET /v1/relationships/{id}
+
+Returns the full definition of a single predicate, including its domain, range, inverse, cardinality, and FIBO alignment.
+
+**Required scope**: `read:entities`
+
+### Path Parameters
+
+<ParamField path="id" type="string" required>
+  The URL-encoded predicate IRI. For example, to retrieve the `bsl:holds` predicate, pass `bsl%3Aholds`.
+</ParamField>
+
+### Request
+
+```bash
+curl https://api.bankingsemanticlayer.io/v1/relationships/bsl%3Aholds \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+### Response
+
+```json
+{
+  "data": {
+    "id": "bsl:holds",
+    "label": "holds",
+    "domain": "bsl:Customer",
+    "range": "bsl:Account",
+    "inverse": "bsl:heldBy",
+    "description": "A customer holds an account. This is an object property connecting a Customer node to one or more Account nodes.",
+    "cardinality": "one-to-many",
+    "fiboAlignment": null,
+    "symmetric": false,
+    "transitive": false
+  },
+  "meta": {
+    "requestId": "req_rel_002",
+    "timestamp": "2024-06-01T12:00:00Z"
+  }
+}
+```
+
+---
+
+## GET /v1/lineage/{entityId}
+
+Returns the data lineage record for a specific entity instance — a full audit trail of how the instance was created, which source records contributed to it, which mappings were applied, and which business rules fired during enrichment.
+
+**Required scope**: `read:query`
+
+### Path Parameters
+
+<ParamField path="entityId" type="string" required>
+  The URL-encoded IRI of the entity instance whose lineage you want to retrieve. For example, `https%3A%2F%2Fdata.bankingsl.io%2FCUS-00123`.
+</ParamField>
+
+### Request
+
+```bash
+curl 'https://api.bankingsemanticlayer.io/v1/lineage/https%3A%2F%2Fdata.bankingsl.io%2FCUS-00123' \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+### Response
+
+<ResponseField name="entityId" type="string">
+  The IRI of the entity instance this lineage record belongs to.
+</ResponseField>
+
+<ResponseField name="lineageId" type="string">
+  A unique identifier for this lineage record.
+</ResponseField>
+
+<ResponseField name="transformations" type="array">
+  An ordered array of transformation events applied to produce this entity instance.
+
+  <Expandable title="Transformation object fields">
+    <ResponseField name="timestamp" type="string (ISO 8601)">
+      When this transformation was applied.
+    </ResponseField>
+    <ResponseField name="type" type="string">
+      Transformation type: `enrichment`, `merge`, `rule_evaluation`, or `manual_override`.
+    </ResponseField>
+    <ResponseField name="mappingId" type="string">
+      The mapping configuration that was applied, if applicable.
+    </ResponseField>
+    <ResponseField name="source" type="string">
+      Source system identifier for the originating record.
+    </ResponseField>
+    <ResponseField name="rulesApplied" type="array of strings">
+      IDs of business rules that evaluated and matched during this transformation.
+    </ResponseField>
+    <ResponseField name="changedProperties" type="array of strings">
+      List of property IRIs whose values were set or updated by this transformation.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+```json
+{
+  "data": {
+    "entityId": "https://data.bankingsl.io/CUS-00123",
+    "lineageId": "lin_cus00123_20240601",
+    "transformations": [
+      {
+        "timestamp": "2024-06-01T08:22:11Z",
+        "type": "enrichment",
+        "mappingId": "map-customer-001",
+        "source": "core_banking",
+        "rulesApplied": ["rule_kyc_status_derive"],
+        "changedProperties": [
+          "bsl:fullName",
+          "bsl:dateOfBirth",
+          "bsl:kycStatus"
+        ]
+      },
+      {
+        "timestamp": "2024-06-01T09:15:44Z",
+        "type": "rule_evaluation",
+        "mappingId": null,
+        "source": "aml_engine",
+        "rulesApplied": ["rule_aml_watchlist_check"],
+        "changedProperties": [
+          "bsl:amlRiskScore"
+        ]
+      }
+    ]
+  },
+  "meta": {
+    "requestId": "req_lin_001",
+    "timestamp": "2024-06-01T12:00:00Z"
+  }
+}
+```

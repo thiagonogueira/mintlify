@@ -1,0 +1,256 @@
+---
+title: "Entities API — List and Retrieve Ontology Entity Types"
+sidebarTitle: "Entities API"
+description: "GET /v1/entities and GET /v1/entities/{id} — list canonical entity types, retrieve definitions, properties, and FIBO alignments."
+---
+
+The Entities API gives you read access to the canonical entity type definitions in the Banking Semantic Layer ontology. Entity types are the building blocks of the knowledge graph — they represent real-world concepts such as `Customer`, `Account`, `Transaction`, and `Merchant`. Each entity type has a set of properties (attributes), an IRI, and an alignment to the FIBO ontology where applicable. Use these endpoints to explore the data model, drive UI experiences, or validate your field mappings programmatically.
+
+## GET /v1/entities
+
+Returns a paginated list of all canonical entity types available in your organization's ontology, including both standard `bsl:` entities and any custom entities registered under your org namespace.
+
+**Required scope**: `read:entities`
+
+### Query Parameters
+
+<ParamField query="limit" type="integer" default="20">
+  Number of entity types to return per page. Maximum value is `100`.
+</ParamField>
+
+<ParamField query="offset" type="integer" default="0">
+  Zero-based pagination offset. Use in combination with `limit` to page through results.
+</ParamField>
+
+<ParamField query="namespace" type="string">
+  Filter results to a specific namespace prefix. For example, pass `bsl` to return only standard Banking Semantic Layer entities, or your org prefix to return only custom entities.
+</ParamField>
+
+### Request
+
+```bash
+curl https://api.bankingsemanticlayer.io/v1/entities \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+### Response
+
+```json
+{
+  "data": [
+    {
+      "id": "bsl:Customer",
+      "label": "Customer",
+      "description": "An individual or organization holding a banking relationship",
+      "namespace": "bsl",
+      "fiboAlignment": "fibo-fnd:Party",
+      "propertyCount": 12
+    },
+    {
+      "id": "bsl:Account",
+      "label": "Account",
+      "description": "A financial account held by a customer",
+      "namespace": "bsl",
+      "fiboAlignment": "fibo-fbc:Account",
+      "propertyCount": 15
+    },
+    {
+      "id": "bsl:Transaction",
+      "label": "Transaction",
+      "description": "A financial transaction associated with an account",
+      "namespace": "bsl",
+      "fiboAlignment": "fibo-fbc:Transaction",
+      "propertyCount": 22
+    }
+  ],
+  "meta": {
+    "total": 18,
+    "limit": 20,
+    "offset": 0,
+    "requestId": "req_ent_001",
+    "timestamp": "2024-06-01T12:00:00Z"
+  }
+}
+```
+
+---
+
+## GET /v1/entities/{id}
+
+Returns the full definition of a single entity type, including all of its property definitions, cardinality constraints, and FIBO alignment details.
+
+**Required scope**: `read:entities`
+
+### Path Parameters
+
+<ParamField path="id" type="string" required>
+  The URL-encoded entity IRI. For example, to retrieve `bsl:Customer`, pass `bsl%3ACustomer`. The colon in the IRI prefix must be percent-encoded as `%3A`.
+</ParamField>
+
+### Request
+
+```bash
+curl https://api.bankingsemanticlayer.io/v1/entities/bsl%3ACustomer \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+### Response
+
+<ResponseField name="id" type="string">
+  The IRI of the entity type (e.g., `bsl:Customer`).
+</ResponseField>
+
+<ResponseField name="label" type="string">
+  Human-readable display name for the entity type.
+</ResponseField>
+
+<ResponseField name="description" type="string">
+  A plain-language description of what the entity represents.
+</ResponseField>
+
+<ResponseField name="namespace" type="string">
+  The namespace prefix (e.g., `bsl`, `org`).
+</ResponseField>
+
+<ResponseField name="fiboAlignment" type="string">
+  The FIBO IRI this entity aligns to, if applicable.
+</ResponseField>
+
+<ResponseField name="properties" type="array">
+  Array of property definitions for this entity type.
+
+  <Expandable title="Property object fields">
+    <ResponseField name="id" type="string">
+      IRI of the property (e.g., `bsl:fullName`).
+    </ResponseField>
+    <ResponseField name="label" type="string">
+      Human-readable property name.
+    </ResponseField>
+    <ResponseField name="dataType" type="string">
+      XSD data type or entity IRI for object properties (e.g., `xsd:string`, `xsd:decimal`, `bsl:Account`).
+    </ResponseField>
+    <ResponseField name="required" type="boolean">
+      Whether this property is required for the entity to be considered valid.
+    </ResponseField>
+    <ResponseField name="cardinality" type="string">
+      Allowed value count: `single`, `multiple`.
+    </ResponseField>
+    <ResponseField name="fiboAlignment" type="string">
+      FIBO IRI this property aligns to, if applicable.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+```json
+{
+  "data": {
+    "id": "bsl:Customer",
+    "label": "Customer",
+    "description": "An individual or organization holding a banking relationship",
+    "namespace": "bsl",
+    "fiboAlignment": "fibo-fnd:Party",
+    "properties": [
+      {
+        "id": "bsl:fullName",
+        "label": "Full Name",
+        "dataType": "xsd:string",
+        "required": true,
+        "cardinality": "single",
+        "fiboAlignment": "fibo-fnd:name"
+      },
+      {
+        "id": "bsl:dateOfBirth",
+        "label": "Date of Birth",
+        "dataType": "xsd:date",
+        "required": false,
+        "cardinality": "single",
+        "fiboAlignment": null
+      },
+      {
+        "id": "bsl:kycStatus",
+        "label": "KYC Status",
+        "dataType": "bsl:KYCStatus",
+        "required": false,
+        "cardinality": "single",
+        "fiboAlignment": null
+      },
+      {
+        "id": "bsl:holds",
+        "label": "Holds",
+        "dataType": "bsl:Account",
+        "required": false,
+        "cardinality": "multiple",
+        "fiboAlignment": null
+      }
+    ]
+  },
+  "meta": {
+    "requestId": "req_ent_002",
+    "timestamp": "2024-06-01T12:00:00Z"
+  }
+}
+```
+
+---
+
+## GET /v1/entities/{id}/instances
+
+Returns actual data records of the specified entity type from your organization's knowledge graph. This endpoint lets you retrieve enriched entity instances that have been previously loaded via the enrichment pipeline.
+
+**Required scope**: `read:query`
+
+### Path Parameters
+
+<ParamField path="id" type="string" required>
+  The URL-encoded entity IRI identifying the entity type whose instances you want to retrieve.
+</ParamField>
+
+### Query Parameters
+
+<ParamField query="limit" type="integer" default="20">
+  Maximum number of instances to return. Maximum value is `100`.
+</ParamField>
+
+<ParamField query="cursor" type="string">
+  Cursor token for pagination. Obtain this value from `meta.next_cursor` in a previous response.
+</ParamField>
+
+<ParamField query="filter" type="string">
+  A URL-encoded JSON filter expression to narrow results. Supports equality and range operators on property values. For example:
+  `{"bsl:kycStatus": "bsl:Verified"}` returns only verified customers.
+</ParamField>
+
+### Request
+
+```bash
+curl 'https://api.bankingsemanticlayer.io/v1/entities/bsl%3ACustomer/instances?limit=5' \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+### Response
+
+```json
+{
+  "data": [
+    {
+      "@id": "https://data.bankingsl.io/CUS-00123",
+      "@type": "bsl:Customer",
+      "bsl:fullName": "Jane Smith",
+      "bsl:dateOfBirth": "1985-04-12",
+      "bsl:kycStatus": "bsl:Verified"
+    },
+    {
+      "@id": "https://data.bankingsl.io/CUS-00124",
+      "@type": "bsl:Customer",
+      "bsl:fullName": "Acme Corp",
+      "bsl:kycStatus": "bsl:Pending"
+    }
+  ],
+  "meta": {
+    "limit": 5,
+    "next_cursor": "cur_eyJvZmZzZXQiOjV9",
+    "requestId": "req_ent_003",
+    "timestamp": "2024-06-01T12:00:00Z"
+  }
+}
+```

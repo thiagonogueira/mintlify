@@ -1,0 +1,108 @@
+---
+title: "Authenticate with the Banking Semantic Layer API"
+sidebarTitle: "Authentication"
+description: "Create and manage API keys, pass credentials in requests, and understand authentication errors for the Banking Semantic Layer API."
+---
+
+The Banking Semantic Layer API uses API key authentication. Every request must include a valid API key in the `Authorization` header. Keys are scoped — each key is granted only the permissions it needs, so you can issue separate keys for read-only analytics, enrichment pipelines, and administrative operations without exposing unnecessary access. This page explains how to create keys, use them in requests, and manage their lifecycle safely.
+
+<Warning>
+  Never commit API keys to source control. Treat them as passwords. Use environment variables, a secrets manager (such as AWS Secrets Manager, HashiCorp Vault, or GCP Secret Manager), or your CI/CD platform's secret store.
+</Warning>
+
+## Getting an API Key
+
+<Steps>
+  <Step title="Log in to the dashboard">
+    Navigate to [https://app.bankingsemanticlayer.io](https://app.bankingsemanticlayer.io) and sign in with your credentials.
+  </Step>
+  <Step title="Open the API Keys settings">
+    Click your organization name in the top navigation bar, then select **Settings → API Keys**.
+  </Step>
+  <Step title="Create a new key">
+    Click **Create API Key**. Give your key a descriptive name (e.g., `prod-enrichment-pipeline` or `ci-read-only`), select the appropriate environment (Production or Sandbox), and check the scopes your key requires. See the [Scopes](#api-key-scopes) section below for a full list.
+  </Step>
+  <Step title="Copy and store your key">
+    Your API key is shown **only once** immediately after creation. Copy it now and store it securely. If you lose the key, you must revoke it and create a new one — there is no way to retrieve a key after you leave the creation screen.
+  </Step>
+</Steps>
+
+## Using Your API Key
+
+Pass your API key as a Bearer token in the `Authorization` header on every request.
+
+### cURL
+
+```bash
+curl https://api.bankingsemanticlayer.io/v1/entities \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+### JavaScript SDK
+
+```javascript
+import { BankingSL } from "@bankingsl/sdk";
+
+const client = new BankingSL({
+  apiKey: process.env.BSL_API_KEY,
+});
+
+const entities = await client.entities.list();
+```
+
+### Python SDK
+
+```python
+import os
+from bankingsl import BankingSL
+
+client = BankingSL(api_key=os.environ["BSL_API_KEY"])
+
+entities = client.entities.list()
+```
+
+<Tip>
+  For CI/CD pipelines, create a dedicated API key with the minimum scopes required (typically `read:query` or `write:enrich`) and set a short expiry. Rotate the key on each deployment if your secrets manager supports dynamic secrets.
+</Tip>
+
+## API Key Scopes
+
+When you create an API key, you select one or more scopes that define what operations the key can perform. Follow the principle of least privilege — grant only the scopes a given integration actually needs.
+
+| Scope | Description |
+|-------|-------------|
+| `read:entities` | Read entity type definitions, properties, and FIBO alignments |
+| `read:query` | Execute read-only semantic queries via `POST /v1/query` |
+| `write:mappings` | Create, update, and delete field mapping configurations |
+| `write:enrich` | Submit records for enrichment via `POST /v1/enrich` |
+| `write:rules` | Create, update, and delete business rules |
+| `admin` | Full access, including API key management and organization settings |
+
+<Info>
+  The `admin` scope should be issued only to human user sessions and service accounts responsible for platform configuration. Avoid using `admin`-scoped keys in application code or automated pipelines.
+</Info>
+
+## Key Rotation
+
+You can rotate an API key without interrupting your integration by following this zero-downtime procedure:
+
+1. **Create a new key** with the same scopes as the key you are replacing.
+2. **Deploy the new key** to your systems — update environment variables, secret store entries, or configuration files.
+3. **Verify** that your integration is successfully authenticating with the new key by checking for `200` responses and the absence of `401` errors in your logs.
+4. **Revoke the old key** from the dashboard under **Settings → API Keys** by clicking **Revoke** next to the key. Revoking a key is immediate and irreversible.
+
+<Note>
+  Both the old and new key work simultaneously during the deployment window, so there is no gap in service. Complete the rotation promptly — do not leave both keys active longer than necessary.
+</Note>
+
+## Authentication Errors
+
+If authentication fails, the API returns a `401 UNAUTHORIZED` or `403 FORBIDDEN` error. Use the table below to diagnose and resolve common issues.
+
+| HTTP Status | Error Code | Cause | Remediation |
+|-------------|------------|-------|-------------|
+| `401` | `UNAUTHORIZED` | `Authorization` header is missing | Add `Authorization: Bearer YOUR_API_KEY` to the request |
+| `401` | `UNAUTHORIZED` | API key has been revoked | Generate a new API key from the dashboard |
+| `401` | `UNAUTHORIZED` | API key is malformed or truncated | Verify the full key value was copied; re-generate if in doubt |
+| `401` | `UNAUTHORIZED` | Production key used against sandbox URL (or vice versa) | Confirm the key environment matches the base URL environment |
+| `403` | `FORBIDDEN` | Key lacks the required scope for this endpoint | Add the necessary scope or use a key with broader permissions |

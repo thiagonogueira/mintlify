@@ -1,0 +1,91 @@
+---
+title: "Customer Entity: Modeling Banking Relationships"
+sidebarTitle: "Customers"
+description: "Learn how the Banking Semantic Layer models customer entities, KYC status, risk tiers, and linked accounts in the financial ontology."
+---
+
+The Banking Semantic Layer represents customers as first-class ontological entities, enabling you to model, query, and govern customer data with semantic precision. Whether you are onboarding individual retail clients or complex corporate entities, the `bsl:Customer` type gives you a unified, standards-aligned representation that connects directly to accounts, products, and compliance workflows.
+
+## Customer Model Overview
+
+The `bsl:Customer` entity is the root type for all customer representations in the ontology. It branches into two concrete sub-types that capture the structural differences between natural persons and legal entities:
+
+- **`bsl:IndividualCustomer`** — represents a natural person, such as a retail banking customer. This sub-type supports personal identifiers like `bsl:dateOfBirth` and individual tax IDs.
+- **`bsl:CorporateCustomer`** — represents a legal entity such as a company, trust, or partnership. Corporate customers share the common KYC and risk properties but omit person-specific fields.
+
+Both sub-types inherit the full set of shared `bsl:Customer` properties and participate equally in account linkage, risk tier assignment, and compliance workflows. This inheritance model lets you write queries against `bsl:Customer` when you do not need to distinguish between individual and corporate clients, and narrow to the specific sub-type when you do.
+
+## Customer Properties
+
+| Property | Type | Required | Description |
+|---|---|---|---|
+| `bsl:customerId` | `string` | Yes | Unique customer identifier, used as the primary key across all linked entities |
+| `bsl:fullName` | `string` | Yes | Full legal name as it appears on official documents |
+| `bsl:dateOfBirth` | `date` | No | Date of birth — applicable to `bsl:IndividualCustomer` only |
+| `bsl:taxId` | `string` | No | Tax identification number (e.g., SSN, EIN, VAT number) |
+| `bsl:kycStatus` | `bsl:KYCStatus` | Yes | Current KYC verification status |
+| `bsl:riskTier` | `bsl:RiskTier` | No | Assigned risk tier determined by the risk scoring pipeline |
+| `bsl:onboardedDate` | `dateTime` | Yes | Timestamp (UTC) at which the customer was onboarded |
+| `bsl:country` | `string` | Yes | Country of residence (individuals) or incorporation (corporates), as an ISO 3166-1 alpha-2 code |
+| `bsl:holds` | `bsl:Account` | No | One or more accounts linked to this customer |
+
+## KYC Status Values
+
+The `bsl:KYCStatus` vocabulary term tracks where a customer sits in the identity verification lifecycle. Every customer record must carry a `bsl:kycStatus` value at all times.
+
+| Status | Description |
+|---|---|
+| `bsl:Pending` | Customer record has been created but KYC verification has not yet started |
+| `bsl:InProgress` | Identity documents have been submitted and are under active review |
+| `bsl:Verified` | KYC checks have passed; the customer is fully verified |
+| `bsl:Failed` | One or more KYC checks did not pass; the customer requires remediation |
+| `bsl:Expired` | A previously verified KYC record has passed its validity window and must be renewed |
+
+## Risk Tier Values
+
+The `bsl:RiskTier` vocabulary classifies customers by their assessed financial crime and credit risk level. Risk tiers feed directly into AML monitoring thresholds and product eligibility rules.
+
+| Tier | Description |
+|---|---|
+| `bsl:Low` | Standard-risk customer; routine monitoring applies |
+| `bsl:Medium` | Elevated risk indicators present; enhanced periodic review required |
+| `bsl:High` | Significant risk indicators; enhanced due diligence and closer transaction monitoring required |
+| `bsl:Critical` | Highest risk classification; may require manual approval for transactions and products |
+
+## Example: Customer Record in JSON-LD
+
+The following example shows a fully populated `bsl:IndividualCustomer` record serialized as JSON-LD, ready for ingestion into the semantic layer.
+
+```json
+{
+  "@context": "https://ontology.bankingsl.io/v1/context.json",
+  "@type": "bsl:IndividualCustomer",
+  "bsl:customerId": "CUS-00123",
+  "bsl:fullName": "Jane Smith",
+  "bsl:dateOfBirth": "1985-03-15",
+  "bsl:kycStatus": "bsl:Verified",
+  "bsl:riskTier": "bsl:Low",
+  "bsl:onboardedDate": "2022-01-10T09:00:00Z",
+  "bsl:country": "US"
+}
+```
+
+## Querying Customers
+
+You can use SPARQL queries against the semantic layer to find customers matching specific compliance criteria. The example below retrieves all customers who carry a `bsl:High` risk tier and whose KYC status has either expired or failed — a common input for remediation workflows.
+
+```sparql
+SELECT ?customer ?name ?kycStatus WHERE {
+  ?customer a bsl:Customer ;
+            bsl:fullName ?name ;
+            bsl:riskTier bsl:High ;
+            bsl:kycStatus ?kycStatus .
+  FILTER(?kycStatus IN (bsl:Expired, bsl:Failed))
+}
+```
+
+This query returns the customer URI, full name, and specific KYC status for every matched record. You can extend the `SELECT` clause to include `bsl:country` or `bsl:onboardedDate` for richer reporting output.
+
+<Warning>
+Customer records contain personally identifiable information (PII) governed by GDPR and equivalent data privacy regulations. Before exposing `bsl:fullName`, `bsl:dateOfBirth`, `bsl:taxId`, or `bsl:country` in query results, reports, or downstream systems, ensure you apply the appropriate field-level data masking policies via the `X-Data-Policy: masked` request header. Failure to mask PII in non-permissioned contexts may constitute a data protection violation.
+</Warning>

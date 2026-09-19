@@ -1,47 +1,218 @@
 ---
-title: "Quickstart"
-description: "Begin with a guide on the fastest path to a successful outcome"
+title: "Get Started with the Banking Semantic Layer"
+sidebarTitle: "Quickstart"
+description: "Set up your API key, make your first semantic query, and map banking data to the ontology in under 10 minutes."
 ---
 
-Describe how someone begins using your product. What is the first thing they need to do? Are there any prerequisites?
-
-A quickstart should take someone from zero to using your product. They'll get a quick win and a sense of what they can accomplish.
-
-## Prerequisites
-
-Before you begin, you must have:
-
-- Requirement one (for example, Node.js 18+, a free account, an API key)
-- Requirement two (for example, a compatible device, a compatible browser, a compatible operating system)
-
-## Get started
+This guide walks you through everything you need to go from a blank slate to a working semantic query against real banking data. By the end you will have your API key configured, the SDK installed, a source record enriched through the ontology, and a SPARQL query returning filtered results — all in under 10 minutes.
 
 <Steps>
-  <Step title="Install">
-    Describe how to install your product or sign up.
+  <Step title="Get your API key">
+    Sign in to the dashboard at [app.bankingsemanticlayer.io](https://app.bankingsemanticlayer.io). Navigate to **Settings → API Keys** and click **Create new key**. Give your key a descriptive name (e.g., `dev-local`) and click **Generate**.
+
+    Copy the key immediately and store it in a secure location such as a password manager or a secrets manager like AWS Secrets Manager or HashiCorp Vault. The dashboard will not show you the full key value again after you close the dialog.
+
+    <Warning>
+      Never commit your API key to source control. Use environment variables or a secrets manager to inject it at runtime.
+    </Warning>
+  </Step>
+
+  <Step title="Install the SDK">
+    The Banking Semantic Layer SDK is available for JavaScript/TypeScript and Python. You can also call the API directly over HTTP if you prefer not to use a client library.
+
+    <CodeGroup>
+      ```bash npm
+      npm install @banking-sl/sdk
+      ```
+
+      ```bash pip
+      pip install banking-sl
+      ```
+
+      ```bash curl
+      # No installation required — use curl directly against the API.
+      # See Step 3 for an example request.
+      curl --version
+      ```
+    </CodeGroup>
+
+    After installation, set your API key as an environment variable so you don't need to hard-code it:
 
     ```bash
-    npm install your-package
+    export BANKING_SL_API_KEY="YOUR_API_KEY"
     ```
   </Step>
-  <Step title="Configure">
-    Describe any setup or configuration needed before first use.
 
-    ```bash
-    your-cli init
+  <Step title="Make your first call">
+    List the canonical entity types available in your workspace. This is a good smoke test to confirm your key is active and your network can reach the API.
+
+    <CodeGroup>
+      ```javascript JavaScript
+      const { BankingSL } = require('@banking-sl/sdk');
+
+      const client = new BankingSL({ apiKey: process.env.BANKING_SL_API_KEY });
+
+      const entities = await client.entities.list();
+      console.log(entities);
+      ```
+
+      ```python Python
+      from banking_sl import BankingSL
+
+      client = BankingSL(api_key=os.environ["BANKING_SL_API_KEY"])
+
+      entities = client.entities.list()
+      print(entities)
+      ```
+
+      ```bash curl
+      curl https://api.bankingsemanticlayer.io/v1/entities \
+        -H "Authorization: Bearer YOUR_API_KEY"
+      ```
+    </CodeGroup>
+
+    A successful response returns the list of available entity types in your workspace:
+
+    ```json
+    {
+      "entities": [
+        { "type": "bsl:Customer", "label": "Customer", "version": "2.1.0" },
+        { "type": "bsl:Account",  "label": "Account",  "version": "2.1.0" },
+        { "type": "bsl:Transaction", "label": "Transaction", "version": "2.1.0" },
+        { "type": "bsl:Product",  "label": "Product",  "version": "2.1.0" }
+      ]
+    }
     ```
   </Step>
-  <Step title="Run it">
-    Show the first thing a user does to see it working.
 
-    ```bash
-    your-cli start
+  <Step title="Map your first record">
+    Enrichment takes a raw record from a source system and runs it through the semantic layer, applying your field mappings, resolving relationships, and attaching taxonomy labels. Pass the source system name and one or more raw records to the `enrich` method.
+
+    <CodeGroup>
+      ```javascript JavaScript
+      const { BankingSL } = require('@banking-sl/sdk');
+
+      const client = new BankingSL({ apiKey: process.env.BANKING_SL_API_KEY });
+
+      const enriched = await client.enrich({
+        source: 'core_banking',
+        records: [
+          {
+            id: 'ACC-001',
+            type: 'savings',
+            balance: 10000,
+            currency: 'USD',
+            customerId: 'CUS-123'
+          }
+        ]
+      });
+
+      console.log(enriched);
+      ```
+
+      ```python Python
+      from banking_sl import BankingSL
+
+      client = BankingSL(api_key=os.environ["BANKING_SL_API_KEY"])
+
+      enriched = client.enrich(
+          source="core_banking",
+          records=[
+              {
+                  "id": "ACC-001",
+                  "type": "savings",
+                  "balance": 10000,
+                  "currency": "USD",
+                  "customerId": "CUS-123",
+              }
+          ],
+      )
+
+      print(enriched)
+      ```
+    </CodeGroup>
+
+    The enriched response maps your raw fields to canonical ontology properties and attaches resolved relationships:
+
+    ```json
+    {
+      "enriched": [
+        {
+          "bsl:accountNumber": "ACC-001",
+          "bsl:accountType": "bsl:SavingsAccount",
+          "bsl:balance": 10000,
+          "bsl:currency": "USD",
+          "bsl:heldBy": {
+            "@type": "bsl:Customer",
+            "bsl:customerId": "CUS-123"
+          },
+          "_meta": {
+            "sourceSystem": "core_banking",
+            "mappingVersion": "1.4.2",
+            "enrichedAt": "2024-11-15T09:32:00Z"
+          }
+        }
+      ]
+    }
     ```
+  </Step>
+
+  <Step title="Run a semantic query">
+    Use the SPARQL query endpoint to ask questions across all enriched data in your workspace. SPARQL lets you filter, traverse relationships, and aggregate in ways that are difficult or impossible with flat SQL.
+
+    <CodeGroup>
+      ```javascript JavaScript
+      const { BankingSL } = require('@banking-sl/sdk');
+
+      const client = new BankingSL({ apiKey: process.env.BANKING_SL_API_KEY });
+
+      const results = await client.query({
+        sparql: `
+          SELECT ?account ?balance WHERE {
+            ?account a bsl:Account ;
+                     bsl:balance ?balance .
+            FILTER(?balance > 5000)
+          }
+        `
+      });
+
+      console.log(results);
+      ```
+
+      ```python Python
+      from banking_sl import BankingSL
+
+      client = BankingSL(api_key=os.environ["BANKING_SL_API_KEY"])
+
+      results = client.query(
+          sparql="""
+            SELECT ?account ?balance WHERE {
+              ?account a bsl:Account ;
+                       bsl:balance ?balance .
+              FILTER(?balance > 5000)
+            }
+          """
+      )
+
+      print(results)
+      ```
+
+      ```bash curl
+      curl -X POST https://api.bankingsemanticlayer.io/v1/query \
+        -H "Authorization: Bearer YOUR_API_KEY" \
+        -H "Content-Type: application/json" \
+        -d '{
+          "sparql": "SELECT ?account ?balance WHERE { ?account a bsl:Account ; bsl:balance ?balance . FILTER(?balance > 5000) }"
+        }'
+      ```
+    </CodeGroup>
   </Step>
 </Steps>
 
-<Tip>
-  Give people a way to get help. This could be a link to a support page, a chat with a customer support agent, or a forum for your product.
+<Note>
+  For the complete list of API endpoints, request/response schemas, and error codes, see the [API Reference](/api/overview).
+</Note>
 
-  Example: Need help? Reach out to us at [support@yourcompany.com](mailto:support@yourcompany.com).
+<Tip>
+  You don't need to hand-write SPARQL from scratch. The dashboard at [app.bankingsemanticlayer.io](https://app.bankingsemanticlayer.io) includes a **SPARQL Query Builder** with autocomplete for all `bsl:` namespace properties, a visual relationship explorer, and a query history panel. Build your query in the UI, then copy it into your code.
 </Tip>

@@ -1,0 +1,94 @@
+---
+title: "Semantic Relationships Between Banking Entities"
+sidebarTitle: "Relationships"
+description: "Explore how banking entities connect through semantic predicates — from customer-account ownership to transaction flows and product subscriptions."
+---
+
+Relationships are the semantic connective tissue of the Banking Semantic Layer ontology. While entities define what objects exist in your banking data, relationships define how those objects are meaningfully connected to one another. Every relationship is a formally declared OWL object property with a named domain, range, and — where appropriate — an inverse predicate. This bidirectionality lets you traverse the knowledge graph in either direction without writing mirrored queries, and it enables the platform's inference engine to derive relationships you haven't explicitly asserted in your source data.
+
+## Core Relationships
+
+The following predicates form the essential relationship vocabulary of the ontology. Each predicate is declared under the `bsl:` namespace and aligns to the corresponding FIBO object property where one exists.
+
+| Predicate | Domain | Range | Inverse | Description |
+|-----------|--------|-------|---------|-------------|
+| `bsl:holds` | `bsl:Customer` | `bsl:Account` | `bsl:heldBy` | Customer holds an account |
+| `bsl:heldBy` | `bsl:Account` | `bsl:Customer` | `bsl:holds` | Account is held by a customer |
+| `bsl:hasTransaction` | `bsl:Account` | `bsl:Transaction` | `bsl:appliedTo` | Account has a transaction |
+| `bsl:appliedTo` | `bsl:Transaction` | `bsl:Account` | `bsl:hasTransaction` | Transaction applied to an account |
+| `bsl:subscribedTo` | `bsl:Customer` | `bsl:Product` | `bsl:subscribedBy` | Customer subscribed to a product |
+| `bsl:issuedBy` | `bsl:Product` | `bsl:Institution` | — | Product issued by a financial institution |
+| `bsl:locatedAt` | `bsl:Account` | `bsl:Branch` | — | Account managed by a branch |
+
+## Traversing Relationships
+
+You can traverse these relationships using SPARQL queries against the platform's graph endpoint at `https://api.bankingsemanticlayer.io/v1/sparql`. The following examples demonstrate common traversal patterns.
+
+**Find all accounts held by a specific customer:**
+
+```sparql
+# Find all accounts held by a specific customer
+SELECT ?account ?balance WHERE {
+  ?customer a bsl:Customer ;
+            bsl:customerId "CUS-00123" ;
+            bsl:holds ?account .
+  ?account bsl:balance ?balance .
+}
+```
+
+**Find all transactions over $10,000 for compliance review:**
+
+```sparql
+# Find all transactions over $10,000 for compliance review
+SELECT ?tx ?amount ?timestamp WHERE {
+  ?tx a bsl:Transaction ;
+      bsl:amount ?amount ;
+      bsl:timestamp ?timestamp .
+  FILTER(?amount > 10000)
+}
+```
+
+**Trace a full customer-to-transaction path in a single query:**
+
+```sparql
+# Trace from customer through account to transactions
+SELECT ?customerId ?accountNumber ?txId ?amount WHERE {
+  ?customer a bsl:Customer ;
+            bsl:customerId ?customerId ;
+            bsl:holds ?account .
+  ?account bsl:accountNumber ?accountNumber ;
+           bsl:hasTransaction ?tx .
+  ?tx bsl:transactionId ?txId ;
+      bsl:amount ?amount .
+}
+ORDER BY DESC(?amount)
+LIMIT 50
+```
+
+<Tip>
+  You can explore relationships visually using the **Relationship Explorer** in the dashboard. Navigate to **Ontology → Relationship Explorer**, enter any entity IRI or identifier, and the tool renders an interactive graph of all connected nodes up to three hops away. You can filter by predicate type and export the subgraph as JSON-LD or Turtle.
+</Tip>
+
+## Relationship Cardinality
+
+The ontology declares cardinality constraints on all core predicates. Understanding these constraints helps you build queries and data pipelines that match the graph's actual topology.
+
+### One-to-Many
+
+A single `bsl:Customer` can hold multiple `bsl:Account` instances via `bsl:holds`. Conversely, each `bsl:Account` has exactly one `bsl:Customer` via `bsl:heldBy` (unless the account is jointly held, in which case multiple `bsl:heldBy` assertions are permitted).
+
+Similarly, a single `bsl:Account` can have many `bsl:Transaction` instances via `bsl:hasTransaction`, but each `bsl:Transaction` relates to at most two accounts — one debit account and one credit account — via `bsl:debitAccount` and `bsl:creditAccount`.
+
+### Many-to-Many
+
+A `bsl:Customer` can be `bsl:subscribedTo` multiple `bsl:Product` instances, and a single `bsl:Product` can be subscribed to by many customers. This predicate carries no inverse cardinality constraint, so querying from either direction returns a full set of matched nodes.
+
+The table below summarizes the declared cardinality patterns:
+
+| Predicate | Customer Side | Account/Product Side |
+|-----------|--------------|----------------------|
+| `bsl:holds` / `bsl:heldBy` | One customer | Many accounts |
+| `bsl:hasTransaction` / `bsl:appliedTo` | Many transactions per account | One or two accounts per transaction |
+| `bsl:subscribedTo` / `bsl:subscribedBy` | Many products per customer | Many customers per product |
+| `bsl:issuedBy` | — | One institution per product |
+| `bsl:locatedAt` | — | One branch per account |

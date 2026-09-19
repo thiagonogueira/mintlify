@@ -1,0 +1,219 @@
+---
+title: "Query API — Semantic SPARQL Queries on Banking Data"
+sidebarTitle: "Query API"
+description: "POST /v1/query — execute SPARQL queries against the Banking Semantic Layer knowledge graph and receive JSON-formatted binding results."
+---
+
+The Query API lets you execute SPARQL queries directly against your organization's knowledge graph. SPARQL is the W3C standard query language for graph-structured RDF data — it expresses patterns of triples to match against the graph and returns tabular bindings, boolean answers, or new graph constructs. Whether you are building a customer 360 view, investigating suspicious transaction patterns, or traversing account relationships, the Query API gives you full expressive power over the semantic layer.
+
+<Note>
+  In addition to `SELECT` queries (which return tabular bindings), the Query API also supports `ASK` queries (which return a boolean `true`/`false` answer) and `CONSTRUCT` queries (which return a new RDF graph as Turtle). Specify the query form in your SPARQL string — the response shape changes accordingly.
+</Note>
+
+## POST /v1/query
+
+Submits a SPARQL query for execution against your organization's named graph and returns results in a JSON binding format compatible with the SPARQL 1.1 Query Results JSON Format.
+
+**Required scope**: `read:query`
+
+### Request Body
+
+<ParamField body="sparql" type="string" required>
+  A valid SPARQL 1.1 query string. Both `SELECT` and `ASK` query forms return JSON results. `CONSTRUCT` queries return a Turtle-serialized RDF graph in the `data.graph` field.
+</ParamField>
+
+<ParamField body="timeout" type="integer" default="30">
+  Maximum execution time for the query, in seconds. Queries that exceed this limit are cancelled and return a `408 QUERY_TIMEOUT` error. Maximum allowed value is `120` seconds.
+</ParamField>
+
+<ParamField body="limit" type="integer" default="100">
+  Maximum number of result rows to return. This parameter caps the SPARQL result set at the API level; you can also specify `LIMIT` within your SPARQL query itself. Maximum value is `10000`.
+</ParamField>
+
+<ParamField body="namedGraph" type="string">
+  Restrict the query to a specific named graph IRI. If omitted, the query runs against your organization's default graph. Use this parameter to query a specific data partition or tenant graph in multi-tenant deployments.
+</ParamField>
+
+### Request
+
+```bash
+curl -X POST https://api.bankingsemanticlayer.io/v1/query \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sparql": "SELECT ?customer ?name WHERE { ?customer a bsl:Customer ; bsl:fullName ?name . } LIMIT 10"
+  }'
+```
+
+### Response
+
+<ResponseField name="data" type="object">
+  Contains the query result payload.
+
+  <Expandable title="data fields">
+    <ResponseField name="variables" type="array of strings">
+      The ordered list of variable names projected by the `SELECT` clause.
+    </ResponseField>
+    <ResponseField name="bindings" type="array of objects">
+      Each element is a result row — a map from variable name to a binding object.
+
+      <Expandable title="Binding object fields">
+        <ResponseField name="type" type="string">
+          The RDF term type: `uri` (for IRI values), `literal` (for string/typed values), or `bnode` (for blank nodes).
+        </ResponseField>
+        <ResponseField name="value" type="string">
+          The string value of the bound term. For `uri` types, this is the full IRI. For `literal` types, this is the lexical value.
+        </ResponseField>
+        <ResponseField name="datatype" type="string">
+          Present on typed literals (e.g., `xsd:decimal`, `xsd:date`). Absent for plain string literals.
+        </ResponseField>
+        <ResponseField name="xml:lang" type="string">
+          Present on language-tagged literals (e.g., `en`, `fr`). Absent when no language tag applies.
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="meta" type="object">
+  Request metadata.
+
+  <Expandable title="meta fields">
+    <ResponseField name="executionTimeMs" type="integer">
+      Total server-side query execution time in milliseconds.
+    </ResponseField>
+    <ResponseField name="rowCount" type="integer">
+      Number of result rows returned (after applying the `limit`).
+    </ResponseField>
+    <ResponseField name="requestId" type="string">
+      Unique request identifier. Include this value when contacting support.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+```json
+{
+  "data": {
+    "variables": ["customer", "name"],
+    "bindings": [
+      {
+        "customer": {
+          "type": "uri",
+          "value": "https://data.bankingsl.io/CUS-00123"
+        },
+        "name": {
+          "type": "literal",
+          "value": "Jane Smith"
+        }
+      },
+      {
+        "customer": {
+          "type": "uri",
+          "value": "https://data.bankingsl.io/CUS-00124"
+        },
+        "name": {
+          "type": "literal",
+          "value": "Acme Corp"
+        }
+      }
+    ]
+  },
+  "meta": {
+    "executionTimeMs": 45,
+    "rowCount": 2,
+    "requestId": "req_xyz789"
+  }
+}
+```
+
+### More Query Examples
+
+<Tabs>
+  <Tab title="Account balances by customer">
+    ```sparql
+    SELECT ?customer ?customerName ?account ?balance WHERE {
+      ?customer a bsl:Customer ;
+               bsl:fullName ?customerName ;
+               bsl:holds ?account .
+      ?account bsl:balance ?balance ;
+               bsl:currency bsl:USD .
+    }
+    ORDER BY DESC(?balance)
+    LIMIT 25
+    ```
+  </Tab>
+  <Tab title="Transactions over $10,000 (CTR candidates)">
+    ```sparql
+    SELECT ?txn ?amount ?currency ?account ?customer WHERE {
+      ?txn a bsl:Transaction ;
+           bsl:amount ?amount ;
+           bsl:currency ?currency ;
+           bsl:debitedFrom ?account .
+      ?account bsl:heldBy ?customer .
+      FILTER (?amount > 10000 && ?currency = bsl:USD)
+    }
+    ORDER BY DESC(?amount)
+    ```
+  </Tab>
+  <Tab title="ASK — does customer have an open account?">
+    ```sparql
+    ASK {
+      <https://data.bankingsl.io/CUS-00123> bsl:holds ?account .
+      ?account bsl:status bsl:Active .
+    }
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Query Timeouts
+
+If your query does not complete within the `timeout` window, the API returns an HTTP `408` response with error code `QUERY_TIMEOUT`:
+
+```json
+{
+  "error": {
+    "code": "QUERY_TIMEOUT",
+    "message": "Query exceeded the 30-second timeout limit.",
+    "requestId": "req_abc999"
+  }
+}
+```
+
+To avoid timeouts on complex queries, consider the following optimizations:
+
+- **Add a `LIMIT` clause** in your SPARQL to reduce the result set early.
+- **Use named graph scoping** via the `namedGraph` parameter to reduce the size of the dataset being searched.
+- **Filter early**: place `FILTER` expressions as close to the triple patterns they constrain as possible, so the SPARQL engine can prune the search space quickly.
+- **Avoid unbounded `OPTIONAL` blocks** on large entity sets — they can produce a cartesian product effect.
+- **Increase the `timeout`** parameter (up to `120` seconds) for queries that are inherently complex but expected to be slow (e.g., full-graph analytics).
+
+---
+
+## Named Graphs
+
+The Banking Semantic Layer uses named graphs to provide multi-tenant data isolation and to organize data by source, time period, or regulatory scope.
+
+Each organization's data lives in a default named graph automatically. When you submit a query without specifying `namedGraph`, it runs against your organization's default graph. You can list your available named graphs using:
+
+```bash
+curl https://api.bankingsemanticlayer.io/v1/graphs \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+To query a specific named graph, pass its IRI in the request body:
+
+```bash
+curl -X POST https://api.bankingsemanticlayer.io/v1/query \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sparql": "SELECT ?s ?p ?o WHERE { ?s ?p ?o } LIMIT 10",
+    "namedGraph": "https://data.bankingsl.io/graphs/aml-2024-q2"
+  }'
+```
+
+<Info>
+  Named graph IRIs are automatically namespaced per organization — you cannot query another organization's named graphs even if you know their IRI. All named graph access is enforced by the same API key scope and RBAC policies as other endpoints.
+</Info>

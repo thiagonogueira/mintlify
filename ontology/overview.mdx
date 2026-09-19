@@ -1,0 +1,85 @@
+---
+title: "Ontology Model Overview — Banking Semantic Layer"
+sidebarTitle: "Overview"
+description: "Explore the Banking Semantic Layer ontology model: how entities, relationships, taxonomies, and rules form a unified financial knowledge graph."
+---
+
+The Banking Semantic Layer ontology model is the heart of the platform. It provides a shared, machine-readable definition of every financial concept your systems produce and consume — from customers and accounts to transactions, products, and regulatory categories. By grounding your data in a formal ontology, you gain a single source of truth that eliminates semantic drift across upstream sources, downstream consumers, and cross-functional teams. Everything in the platform — enrichment pipelines, query APIs, compliance checks — runs against this model.
+
+## The Four Pillars
+
+The ontology is organized into four interconnected layers. Together they form a complete knowledge graph for banking data.
+
+<CardGroup cols={2}>
+  <Card title="Entities" icon="database" href="/ontology/entities">
+    The canonical object types in the banking domain: Customer, Account, Transaction, Product, and more. Each entity carries a stable IRI, a defined set of properties, and alignment to FIBO concepts.
+  </Card>
+  <Card title="Relationships" icon="arrow-right-arrow-left" href="/ontology/relationships">
+    Semantic predicates that connect entities to one another — from customer-account ownership to transaction flows and product subscriptions. Relationships make the graph traversable and queryable.
+  </Card>
+  <Card title="Taxonomies" icon="list-tree" href="/ontology/taxonomies">
+    Controlled vocabularies for classification: risk tiers, account types, MCC codes, KYC statuses, and regulatory categories. Taxonomies give every enumerated value a stable, resolvable identifier.
+  </Card>
+  <Card title="Rules" icon="shield-check" href="/ontology/rules">
+    Business rules for data validation, inference, and compliance. Rules run at enrichment time to flag violations, derive new facts, and enforce regulatory thresholds automatically.
+  </Card>
+</CardGroup>
+
+## Architecture Diagram
+
+The four pillars nest inside a single cohesive ontology layer that sits above your raw financial data systems.
+
+```text
+┌─────────────────────────────────────────┐
+│           Banking Ontology              │
+│  ┌──────────┐    ┌──────────────────┐  │
+│  │ Entities │────│  Relationships   │  │
+│  └──────────┘    └──────────────────┘  │
+│  ┌──────────┐    ┌──────────────────┐  │
+│  │Taxonomies│    │     Rules        │  │
+│  └──────────┘    └──────────────────┘  │
+└─────────────────────────────────────────┘
+```
+
+Entities and Relationships form the structural backbone of the graph. Taxonomies supply the controlled vocabulary that populates enumerated properties on those entities. Rules operate across all three layers, validating property values, enforcing relationship constraints, and deriving inferred facts at enrichment time.
+
+## FIBO Alignment
+
+The Financial Industry Business Ontology (FIBO) is the industry-standard, OMG-ratified ontology for financial services. It defines hundreds of canonical concepts — from legal entities and financial instruments to market data and regulatory obligations — using formal OWL semantics. Grounding the Banking Semantic Layer in FIBO means your data model speaks the same language as regulators, auditors, and partner institutions that also adopt the standard.
+
+Where a Banking Semantic Layer concept has a direct FIBO equivalent, the `bsl:` class or property is declared as a subclass or subproperty of the corresponding FIBO term. This lets you run FIBO-native SPARQL queries against your data without remapping, and it future-proofs your model against evolving regulatory expectations that increasingly reference FIBO concepts explicitly.
+
+<Note>
+  The platform uses the `bsl:` namespace prefix for all Banking Semantic Layer concepts, layered on top of FIBO base terms. When a `bsl:` class aligns to a FIBO concept, the IRI of the parent FIBO class is declared via `rdfs:subClassOf`. You can inspect alignment metadata for any entity by appending `/alignment` to its IRI in the ontology browser.
+</Note>
+
+## Namespace Reference
+
+Every IRI used in the ontology belongs to one of the following registered namespaces. Use these prefixes in SPARQL queries, JSON-LD contexts, and API filter expressions.
+
+| Prefix | URI | Description |
+|--------|-----|-------------|
+| `bsl:` | `https://ontology.bankingsl.io/v1/` | Banking Semantic Layer namespace |
+| `fibo-fnd:` | `https://spec.edmcouncil.org/fibo/ontology/FND/` | FIBO Foundations |
+| `fibo-fbc:` | `https://spec.edmcouncil.org/fibo/ontology/FBC/` | FIBO Banking & Credit |
+| `xsd:` | `http://www.w3.org/2001/XMLSchema#` | XML Schema datatypes |
+
+All `bsl:` IRIs are dereferenceable — sending an HTTP `GET` to any `bsl:` IRI with `Accept: application/ld+json` returns the full OWL definition of that concept, including its FIBO alignment, property declarations, and taxonomy bindings.
+
+## Versioning
+
+The ontology is versioned independently of the REST API. You can target a specific ontology version in two ways:
+
+**Query parameter** — append `?version=2.1` to any ontology IRI or API endpoint that returns ontology-aware responses:
+
+```text
+GET https://api.bankingsemanticlayer.io/v1/entities/Customer?version=2.1
+```
+
+**Accept-Version header** — include the header in any API request to pin all ontology resolutions in that request to a specific version:
+
+```text
+Accept-Version: ontology=2.1
+```
+
+When you omit a version specifier, the platform resolves to the latest stable ontology version bound to your workspace. You can view and change your workspace's default ontology version in **Settings → Ontology → Version Binding**.

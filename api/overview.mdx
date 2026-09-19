@@ -1,0 +1,164 @@
+---
+title: "REST API Overview — Banking Semantic Layer"
+sidebarTitle: "Overview"
+description: "Overview of the Banking Semantic Layer REST API: base URL, versioning, request format, response format, error codes, and rate limits."
+---
+
+The Banking Semantic Layer REST API gives you programmatic access to every capability of the platform — querying the knowledge graph, enriching records, managing entity mappings, and exploring the ontology. All API interactions follow standard HTTP conventions: you send JSON request bodies, receive JSON responses, and authenticate with a Bearer token. This page covers the fundamentals you need before working with any specific endpoint.
+
+## Base URLs
+
+All API requests target a versioned base URL. Choose the environment that matches your use case:
+
+| Environment | Base URL |
+|-------------|----------|
+| **Production** | `https://api.bankingsemanticlayer.io/v1` |
+| **Sandbox** | `https://api-sandbox.bankingsemanticlayer.io/v1` |
+
+The sandbox environment is fully isolated from production. Sandbox API keys only work against the sandbox base URL and vice versa. See the [FAQ](/reference/faq) for more on the sandbox environment.
+
+## Versioning
+
+The API uses two complementary versioning mechanisms:
+
+**API version** is embedded in the URL path (currently `/v1`). Breaking changes to request/response shapes, endpoint paths, or authentication are always released under a new path version with a 12-month deprecation window for the previous version.
+
+**Ontology version** controls which version of the semantic schema is used to interpret and validate data. You can specify this independently using the `Accept-Version` request header:
+
+```http
+Accept-Version: ontology=2.3.0
+```
+
+If you omit the `Accept-Version` header, the API defaults to the latest stable ontology version for your plan. Pinning to an explicit ontology version is recommended for production workloads to prevent unexpected behavior from additive ontology updates.
+
+## Request Format
+
+All requests that include a body must send JSON and declare the content type:
+
+```http
+Content-Type: application/json
+```
+
+Authentication is carried in the `Authorization` header on every request:
+
+```http
+Authorization: Bearer YOUR_API_KEY
+```
+
+See the [Authentication](/api/authentication) page for instructions on generating API keys and understanding available scopes.
+
+## Response Format
+
+Successful responses return HTTP `200 OK` (for reads) or `201 Created` (for resource creation). All response bodies follow a standard envelope:
+
+```json
+{
+  "data": { ... },
+  "meta": {
+    "requestId": "req_abc123",
+    "timestamp": "2024-06-01T12:00:00Z"
+  }
+}
+```
+
+- **`data`**: The primary payload of the response. Its structure varies by endpoint and is documented on each endpoint's reference page.
+- **`meta`**: Contextual metadata. All responses include `requestId` (useful for support tickets) and `timestamp`. Some responses include additional meta fields such as `total`, `limit`, `offset`, or `executionTimeMs`.
+
+## Error Format
+
+When a request fails, the API returns a non-2xx HTTP status code and an error envelope:
+
+```json
+{
+  "error": {
+    "code": "INVALID_MAPPING",
+    "message": "Field mapping references unknown ontology property: bsl:unknownProp",
+    "requestId": "req_abc123"
+  }
+}
+```
+
+- **`code`**: A machine-readable error code you can use for programmatic error handling.
+- **`message`**: A human-readable description of what went wrong.
+- **`requestId`**: Include this value when contacting support.
+
+### Error Code Reference
+
+| HTTP Status | Error Code | Description |
+|-------------|------------|-------------|
+| `400` | `INVALID_REQUEST` | The request body is malformed or missing required fields |
+| `400` | `INVALID_MAPPING` | A field mapping references an unknown ontology property |
+| `401` | `UNAUTHORIZED` | The API key is missing, expired, or invalid |
+| `403` | `FORBIDDEN` | The API key does not have the required scope for this operation |
+| `404` | `NOT_FOUND` | The requested resource (entity, mapping, job, etc.) does not exist |
+| `422` | `VALIDATION_ERROR` | One or more submitted records failed ontology validation |
+| `429` | `RATE_LIMITED` | The request rate limit for this endpoint has been exceeded |
+| `500` | `INTERNAL_ERROR` | An unexpected server-side error occurred |
+
+## Rate Limits
+
+Every response includes rate limit headers so you can monitor consumption in real time:
+
+```http
+X-RateLimit-Limit: 1000
+X-RateLimit-Remaining: 847
+X-RateLimit-Reset: 1717243260
+```
+
+`X-RateLimit-Reset` is a Unix timestamp indicating when the current window resets.
+
+Default limits by endpoint category:
+
+| Endpoint Category | Limit |
+|-------------------|-------|
+| `POST /v1/enrich` | 1,000 requests / minute |
+| `POST /v1/query` | 100 requests / minute |
+| `GET /v1/entities`, `GET /v1/relationships` | 500 requests / minute |
+| Bulk export jobs (`POST /v1/export`) | 10 concurrent jobs |
+
+Contact [support@bankingsemanticlayer.io](mailto:support@bankingsemanticlayer.io) to request a limit increase for your plan.
+
+## Pagination
+
+List endpoints (e.g., `GET /v1/entities`, `GET /v1/relationships`) use **cursor-based pagination** for consistent results over large datasets.
+
+Request the first page by supplying a `limit` parameter:
+
+```bash
+curl 'https://api.bankingsemanticlayer.io/v1/entities?limit=10' \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+If more results exist, the response `meta` block includes a `next_cursor` value:
+
+```json
+{
+  "data": [ ... ],
+  "meta": {
+    "limit": 10,
+    "next_cursor": "cur_eyJvZmZzZXQiOjEwfQ"
+  }
+}
+```
+
+Pass `next_cursor` as a query parameter to fetch the next page:
+
+```bash
+curl 'https://api.bankingsemanticlayer.io/v1/entities?limit=10&cursor=cur_eyJvZmZzZXQiOjEwfQ' \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+When `next_cursor` is absent from the response, you have reached the last page. Cursor values are opaque strings — do not attempt to decode or construct them manually.
+
+## SDKs
+
+Official SDKs are available if you prefer not to call the REST API directly. Both SDKs are thin wrappers that handle authentication, serialization, and error mapping.
+
+<CardGroup cols={2}>
+  <Card title="JavaScript / TypeScript SDK" icon="js" href="/quickstart">
+    Install via `npm install @bankingsl/sdk`. Supports Node.js 18+ and browser environments. Fully typed with TypeScript definitions included.
+  </Card>
+  <Card title="Python SDK" icon="python" href="/quickstart">
+    Install via `pip install bankingsl`. Supports Python 3.9+. Includes async support via `asyncio` and `httpx`.
+  </Card>
+</CardGroup>

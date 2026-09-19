@@ -1,0 +1,139 @@
+---
+title: "Banking Semantic Layer Glossary"
+sidebarTitle: "Glossary"
+description: "Definitions of key terms used throughout the Banking Semantic Layer platform, from ontology concepts to banking domain terminology."
+---
+
+The Banking Semantic Layer introduces concepts from both the financial services domain and the world of semantic data modeling. This glossary defines the key terms you will encounter throughout the platform documentation, APIs, and SDKs — whether you are a data engineer mapping source systems, a compliance analyst querying the knowledge graph, or an architect designing integrations.
+
+<Accordion title="A — AML">
+  **AML (Anti-Money Laundering)**
+
+  A regulatory framework requiring financial institutions to detect, monitor, and report suspicious transactions that may indicate money laundering activity. AML obligations are enforced by regulators such as FinCEN (USA), the FCA (UK), and national equivalents worldwide. The Banking Semantic Layer supports AML use cases by enriching transaction records with risk scores, counterparty relationships, and flags aligned to AML typologies.
+</Accordion>
+
+<Accordion title="C — Canonical Model, CTR">
+  **Canonical Model**
+
+  A standardized data model that serves as the authoritative representation of business concepts across all systems. Rather than letting each system define its own schema for a "Customer" or "Transaction," a canonical model provides a single, agreed-upon structure that all source systems map to. The Banking Semantic Layer's ontology acts as the canonical model for banking data.
+
+  ---
+
+  **CTR (Currency Transaction Report)**
+
+  A regulatory report required in the United States for cash transactions exceeding $10,000 USD in a single day, as mandated by the Bank Secrecy Act. Financial institutions must file CTRs with FinCEN. The Banking Semantic Layer can automatically flag transactions meeting CTR thresholds during the enrichment pipeline.
+</Accordion>
+
+<Accordion title="D — Data Enrichment">
+  **Data Enrichment**
+
+  The process of enhancing raw records with semantic context, normalized values, and linked relationships. When you submit a raw transaction record to the enrichment API, the platform applies your field mappings, resolves ontology IRIs, evaluates business rules, and returns a semantically annotated JSON-LD document. Enrichment transforms flat, system-specific records into graph-ready, interoperable data.
+</Accordion>
+
+<Accordion title="E — Entity">
+  **Entity**
+
+  A distinct concept in the ontology representing a real-world object, such as a `Customer`, `Account`, `Transaction`, `Merchant`, or `Branch`. Entities are the nodes in the knowledge graph; they have properties (attributes) and are connected to other entities via relationships (predicates). Every entity is identified by a unique IRI.
+</Accordion>
+
+<Accordion title="F — FIBO">
+  **FIBO (Financial Industry Business Ontology)**
+
+  An industry-standard ontology for financial concepts maintained by the EDM Council and published as a W3C standard. FIBO defines machine-readable semantics for entities such as parties, accounts, contracts, and instruments. The Banking Semantic Layer is aligned with FIBO and reuses FIBO IRIs wherever applicable, extending them with the `bsl:` namespace for banking-specific operational concepts not covered by FIBO.
+</Accordion>
+
+<Accordion title="G — Graph Traversal">
+  **Graph Traversal**
+
+  The act of navigating relationships between entities in the knowledge graph — starting from one entity and following predicates to reach connected entities. For example, traversing from a `Transaction` via `bsl:initiatedBy` reaches a `Customer`, and following `bsl:holds` from that `Customer` reaches all of their `Account` nodes. Graph traversal is the foundation of relationship-aware analytics and is expressed in SPARQL using chained triple patterns.
+</Accordion>
+
+<Accordion title="I — IRI">
+  **IRI (Internationalized Resource Identifier)**
+
+  A unique identifier for ontology concepts, similar in structure to a URL but supporting Unicode characters. Every entity type, property, and relationship in the Banking Semantic Layer has an IRI, such as `https://ontology.bankingsl.io/v1/Customer`. In compact form, IRIs are written with namespace prefixes, e.g., `bsl:Customer`. IRIs ensure that concepts are globally unambiguous and can be linked across systems.
+</Accordion>
+
+<Accordion title="J — JSON-LD">
+  **JSON-LD (JSON Linked Data)**
+
+  A JSON-based format for encoding linked data with semantic context. JSON-LD documents include a `@context` property that maps field names to their ontology IRIs, making the data self-describing and interoperable. The enrichment API returns results as JSON-LD, enabling downstream systems to understand the meaning of each field without relying on out-of-band documentation.
+</Accordion>
+
+<Accordion title="K — KYC, Knowledge Graph">
+  **KYC (Know Your Customer)**
+
+  A regulatory process requiring financial institutions to verify the identity of their customers and assess the risks they pose. KYC involves collecting identity documents, screening against sanctions lists, and evaluating risk profiles. The Banking Semantic Layer models KYC data as properties of the `Customer` entity and supports linking KYC records to transactions for ongoing monitoring.
+
+  ---
+
+  **Knowledge Graph**
+
+  A network of entities and relationships forming a machine-readable model of a domain. In a knowledge graph, data is stored not as flat rows and columns but as a web of interconnected nodes (entities) and edges (relationships). The Banking Semantic Layer maintains a knowledge graph of banking concepts that allows you to query across entity types, follow relationships, and discover connections that are invisible in siloed relational databases.
+</Accordion>
+
+<Accordion title="L — Lineage">
+  **Lineage**
+
+  A record of how data was transformed, enriched, or derived throughout its lifecycle. The Banking Semantic Layer captures lineage automatically during enrichment, recording which mapping was applied, which rules fired, when the enrichment occurred, and what the source record looked like. Lineage is queryable via the `/v1/lineage` endpoint and is critical for audit trails in regulated environments.
+</Accordion>
+
+<Accordion title="M — MCC">
+  **MCC (Merchant Category Code)**
+
+  A four-digit code defined by ISO 18245 that classifies a merchant's type of business (e.g., `5411` for grocery stores, `7011` for hotels). MCCs are attached to card transaction records by payment networks. The Banking Semantic Layer maps raw MCC codes to the `bsl:MerchantCategory` taxonomy, enabling consistent categorization of spending across all source systems.
+</Accordion>
+
+<Accordion title="N — Namespace">
+  **Namespace**
+
+  A prefix that identifies a set of ontology terms and disambiguates them from terms in other ontologies. The Banking Semantic Layer uses `bsl:` as its primary namespace (expanding to `https://ontology.bankingsl.io/v1/`). FIBO namespaces such as `fibo-fnd:` and `fibo-fbc:` are also present. Your organization can register a custom namespace (e.g., `org:`) for proprietary extensions.
+</Accordion>
+
+<Accordion title="O — Ontology">
+  **Ontology**
+
+  A formal, machine-readable specification of concepts, relationships, and rules within a domain. Unlike a database schema, which only defines structure, an ontology defines meaning — what each concept represents, how concepts relate to each other, and what logical constraints apply. The Banking Semantic Layer's ontology is the authoritative definition of banking data semantics used to interpret, validate, and link all records processed by the platform.
+</Accordion>
+
+<Accordion title="P — Predicate">
+  **Predicate**
+
+  A relationship property connecting two entities in the ontology, forming the "edge" of the knowledge graph. For example, `bsl:holds` connects a `Customer` to an `Account`. Predicates have a domain (the entity type on the left) and a range (the entity type on the right), and may have an inverse predicate (e.g., `bsl:heldBy` is the inverse of `bsl:holds`). You can list all available predicates via the `/v1/relationships` endpoint.
+</Accordion>
+
+<Accordion title="R — RDF">
+  **RDF (Resource Description Framework)**
+
+  A W3C standard for representing graph-structured data as subject-predicate-object triples. RDF is the foundational data model underlying the Banking Semantic Layer's knowledge graph. Every fact in the graph is expressed as a triple, e.g., `<CUS-00123> <bsl:holds> <ACC-98765>`. RDF enables interoperability between systems and tools that understand semantic web standards.
+</Accordion>
+
+<Accordion title="S — SAR, SPARQL">
+  **SAR (Suspicious Activity Report)**
+
+  A regulatory report that financial institutions are required to file when they suspect that a transaction or pattern of activity may involve money laundering, fraud, or other financial crimes. SARs are filed with FinCEN in the United States and equivalent bodies in other jurisdictions. The Banking Semantic Layer can assist in SAR workflows by surfacing entity relationships, transaction patterns, and AML rule matches.
+
+  ---
+
+  **SPARQL**
+
+  A query language for RDF and graph-structured data, analogous to SQL for relational databases. SPARQL queries express patterns of triples to match against the knowledge graph, supporting SELECT (tabular results), ASK (boolean), and CONSTRUCT (new graph) query forms. You can submit SPARQL queries to the Banking Semantic Layer via the `POST /v1/query` endpoint.
+</Accordion>
+
+<Accordion title="T — Taxonomy, Triple, Turtle">
+  **Taxonomy**
+
+  A hierarchical classification system for organizing concepts into categories and subcategories. The Banking Semantic Layer includes several built-in taxonomies, such as `bsl:AccountType` (Checking, Savings, Credit) and `bsl:MerchantCategory` (backed by MCC codes). Taxonomies allow enriched records to be classified consistently regardless of how source systems name the same concept.
+
+  ---
+
+  **Triple**
+
+  The fundamental unit of RDF data: a subject-predicate-object statement. For example, `<ACC-98765> <bsl:heldBy> <CUS-00123>` is a triple asserting that account ACC-98765 is held by customer CUS-00123. The knowledge graph is composed entirely of triples, and all SPARQL queries operate by pattern-matching against them.
+
+  ---
+
+  **Turtle (Terse RDF Triple Language)**
+
+  A compact, human-readable serialization format for RDF data. Turtle files use namespace prefixes to keep IRIs short and express triples in a syntax similar to natural language. The Banking Semantic Layer supports Turtle as a bulk export format and as an input format for loading custom ontology extensions.
+</Accordion>

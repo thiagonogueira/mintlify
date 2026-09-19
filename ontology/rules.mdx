@@ -1,0 +1,137 @@
+---
+title: "Business Rules and Data Governance in the Ontology"
+sidebarTitle: "Rules"
+description: "Define and apply business rules for data validation, compliance checks, and governance policies across your banking ontology."
+---
+
+The rules engine is the governance layer of the Banking Semantic Layer. It lets you encode business logic — data quality requirements, inferred classifications, and regulatory thresholds — directly into the ontology so that rules run automatically at enrichment time rather than being scattered across downstream application code. When a record flows through the enrichment pipeline, the engine evaluates every applicable rule against the incoming data, attaches violation flags and derived labels to the enriched output, and surfaces a structured audit trail that your compliance and data quality teams can act on.
+
+## Rule Types
+
+The platform supports three categories of rules, each serving a distinct governance purpose.
+
+<Tabs>
+  <Tab title="Validation Rules">
+    Validation rules enforce data quality constraints on incoming records. They check that required properties are present, that values fall within acceptable ranges, and that relationships point to valid entity types. A record that fails a validation rule is flagged in the enrichment response but still processed — the platform never silently drops data.
+
+    **Common validation rules include:**
+
+    - Every `bsl:Account` must carry a `bsl:currency` property. Accounts missing a currency are flagged with `bsl:MissingCurrency`.
+    - Every `bsl:Transaction` must have a `bsl:amount` greater than zero. Transactions with a non-positive amount are flagged with `bsl:InvalidAmount`.
+    - Every `bsl:Customer` with a `bsl:kycStatus` of `bsl:Verified` must have a non-null `bsl:dateOfBirth`. Missing birth dates on verified customers trigger `bsl:IncompleteKYCProfile`.
+    - Every `bsl:Account` with `bsl:status` of `bsl:Active` must have a `bsl:openedDate` in the past. Future-dated open dates are flagged with `bsl:InvalidOpenDate`.
+
+    Validation rules run synchronously during enrichment. You can also trigger on-demand validation against an existing dataset via the `/v1/rules/validate` endpoint.
+  </Tab>
+  <Tab title="Inference Rules">
+    Inference rules derive new facts from existing data. Instead of checking for a violation, they assert a new property value or relationship when a defined pattern is matched. Inferred facts are written back to the enriched record as first-class ontology assertions, clearly marked with `bsl:inferredFrom` to distinguish them from source-asserted data.
+
+    **Common inference rules include:**
+
+    - If a `bsl:Customer` has three or more `bsl:Transaction` records flagged with `bsl:SuspiciousActivity` in a rolling 30-day window, the platform infers `bsl:riskTier: bsl:High` on that customer.
+    - If a `bsl:Account` has had no `bsl:hasTransaction` activity for 365 consecutive days, the platform infers `bsl:status: bsl:Dormant`.
+    - If a `bsl:Customer` holds accounts in three or more distinct `bsl:Currency` values, the platform infers the `bsl:MultiCurrencyHolder` classification label.
+    - If a `bsl:Product` has `bsl:interestRate` greater than the current central bank benchmark rate by more than 5 percentage points, the platform infers `bsl:HighYield` on that product.
+
+    Inference rules run asynchronously after the synchronous validation pass. Inferred facts appear in the `inferred` block of the enrichment response.
+  </Tab>
+  <Tab title="Compliance Rules">
+    Compliance rules encode regulatory obligations as executable logic. They monitor entity properties and transaction patterns against configurable thresholds and, when triggered, produce structured findings that feed directly into your compliance workflows, audit logs, and regulatory reporting pipelines.
+
+    **Common compliance rules include:**
+
+    - **AML-001 (CTR)** — Flag any `bsl:Transaction` where `bsl:amount` exceeds $10,000 USD (or equivalent) as requiring a Currency Transaction Report.
+    - **AML-002 (SAR)** — Detect structuring patterns: multiple transactions just below the CTR threshold within a 24-hour window trigger a Suspicious Activity Report flag.
+    - **KYC-001 (Expiry)** — Flag any `bsl:Customer` whose `bsl:kycStatus` was last verified more than 12 months ago and whose `bsl:riskTier` is `bsl:Medium` or above.
+    - **PSD2-001 (SCA)** — Flag transactions originating from PSD2-regulated payment initiation that lack a strong authentication confirmation token.
+    - **GDPR-001 (Retention)** — Flag any `bsl:Customer` record with a last-activity date older than the configured retention period and no active regulatory hold.
+
+    Compliance rule findings include a `severity` field (`low`, `medium`, `high`, `critical`) and a `regulatoryReference` field linking to the specific regulatory article that motivated the rule.
+  </Tab>
+</Tabs>
+
+## Rule Definition Format
+
+All rules — whether built-in or custom — are represented in a consistent JSON format. This structure is used both for storage in the platform and for the API request body when you create or update a rule.
+
+```json
+{
+  "ruleId": "rule:AML-001",
+  "name": "Large Cash Transaction Report",
+  "type": "compliance",
+  "condition": {
+    "entity": "bsl:Transaction",
+    "property": "bsl:amount",
+    "operator": ">",
+    "value": 10000,
+    "currency": "USD"
+  },
+  "action": {
+    "type": "flag",
+    "label": "bsl:CTRRequired",
+    "severity": "high"
+  }
+}
+```
+
+The key fields in a rule definition are:
+
+- **`ruleId`** — A unique, stable identifier for the rule. Prefix custom rules with your own namespace (e.g., `internal:`) to avoid collisions with built-in rules.
+- **`name`** — A human-readable name for the rule, used in dashboards and audit log entries.
+- **`type`** — One of `validation`, `inference`, or `compliance`.
+- **`condition`** — The logical condition that triggers the rule. Supports property comparisons, date arithmetic, pattern matching, and graph traversal predicates.
+- **`action`** — What the platform does when the condition is met: `flag` a violation, `infer` a new label, `alert` a downstream webhook, or `block` a pipeline stage.
+
+## Creating a Rule via API
+
+You can create custom rules by posting a rule definition to the rules endpoint. Store your rule definition in a local file and reference it with the `@` syntax:
+
+```bash
+curl -X POST https://api.bankingsemanticlayer.io/v1/rules \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d @rule-definition.json
+```
+
+On success, the API returns the created rule object with a server-assigned version number and activation timestamp. Rules take effect on the next enrichment run after creation — they are not applied retroactively to already-enriched records unless you trigger a re-enrichment job via `/v1/enrichment/reprocess`.
+
+## Pre-built Compliance Rules
+
+The platform ships with a library of compliance rules maintained by the Banking Semantic Layer team. These rules encode widely applicable regulatory requirements and are enabled by default in every workspace. You can disable individual rules in **Settings → Rules → Compliance Library** if they are not applicable to your regulatory jurisdiction.
+
+| Rule ID | Name | Regulation | Severity |
+|---------|------|------------|----------|
+| `rule:AML-001` | Large Cash Transaction Report | AML / BSA | High |
+| `rule:AML-002` | Suspicious Activity Pattern (Structuring) | AML / FinCEN | Critical |
+| `rule:KYC-001` | KYC Expiry Check | FATF / Local KYC regulations | Medium |
+| `rule:PSD2-001` | Strong Customer Authentication | EU PSD2 Article 97 | High |
+| `rule:GDPR-001` | Customer Data Retention Limit | EU GDPR Article 5(1)(e) | Medium |
+
+## Rule Evaluation
+
+Rules evaluate in a defined sequence during every enrichment run. Validation rules run first, followed by compliance rules, followed by inference rules. This ordering ensures that inferred facts — such as an elevated risk tier — are derived from already-validated data, and that compliance flags account for inferred properties added earlier in the same pass.
+
+Violations and inferred facts appear in the `governance` block of the enrichment API response:
+
+```json
+{
+  "entityId": "TXN-20240315-884421",
+  "governance": {
+    "violations": [
+      {
+        "ruleId": "rule:AML-001",
+        "severity": "high",
+        "label": "bsl:CTRRequired",
+        "evaluatedAt": "2024-03-15T14:32:05Z"
+      }
+    ],
+    "inferred": []
+  }
+}
+```
+
+You can retrieve the full governance history for any entity — including every rule evaluation, its outcome, and the data snapshot it evaluated against — via `GET /v1/entities/{id}/governance`.
+
+<Note>
+  Built-in compliance rules are reviewed and updated quarterly by the Banking Semantic Layer compliance team to reflect changes in regulatory guidance, updated thresholds, and newly applicable regimes. You receive advance notice of rule changes through the **Changelog** in your workspace dashboard, and you can preview upcoming rule versions before they take effect using the `?version=next` query parameter on any rules API endpoint.
+</Note>

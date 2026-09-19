@@ -1,0 +1,103 @@
+---
+title: "Transaction Entity: Financial Operations Modeling"
+sidebarTitle: "Transactions"
+description: "Explore how the Banking Semantic Layer models financial transactions, including debit/credit flows, MCC codes, AML flags, and transaction type taxonomies."
+---
+
+Financial transactions are the heartbeat of any banking data platform, and the Banking Semantic Layer treats them accordingly. Every monetary event — from a card swipe at a point-of-sale terminal to an inter-bank wire transfer — is modeled as a `bsl:Transaction` entity with a rich set of semantic properties that capture the who, what, when, where, and how of each operation. This structured representation makes transactions queryable, auditable, and directly actionable for analytics, compliance, and fraud detection workflows.
+
+## Transaction Model
+
+The `bsl:Transaction` entity represents a single atomic financial event. Each transaction records the absolute value of the exchange via `bsl:amount`, the direction of funds flow via `bsl:direction`, and the accounts involved via `bsl:debitAccount` and `bsl:creditAccount`. Transactions are always immutable once posted — corrections are represented as separate `bsl:Reversal` or `bsl:Adjustment` transactions that reference the original record, preserving a complete and auditable history.
+
+The debit and credit sides of a transaction map to separate `bsl:Account` entities, enabling you to trace money movement across the entire account graph — including transfers between accounts held by different customers at different institutions.
+
+## Transaction Properties
+
+| Property | Type | Required | Description |
+|---|---|---|---|
+| `bsl:transactionId` | `string` | Yes | Unique transaction identifier assigned at posting time |
+| `bsl:amount` | `decimal` | Yes | Absolute transaction amount (always positive; direction is carried by `bsl:direction`) |
+| `bsl:currency` | `bsl:Currency` | Yes | ISO 4217 currency code for the transaction amount |
+| `bsl:timestamp` | `dateTime` | Yes | Transaction timestamp in UTC |
+| `bsl:transactionType` | `bsl:TransactionType` | Yes | Classification from the `bsl:TransactionType` taxonomy |
+| `bsl:direction` | `bsl:Direction` | Yes | `bsl:Debit` or `bsl:Credit` relative to the originating account |
+| `bsl:mccCode` | `string` | No | Merchant Category Code per ISO 18245, present on card transactions |
+| `bsl:description` | `string` | No | Free-text transaction description or payment narrative |
+| `bsl:debitAccount` | `bsl:Account` | No | Source account from which funds are drawn |
+| `bsl:creditAccount` | `bsl:Account` | No | Destination account to which funds are applied |
+| `bsl:amlFlags` | `bsl:AMLFlag` | No | One or more AML/compliance flags attached by automated screening rules |
+| `bsl:channel` | `bsl:Channel` | No | Channel through which the transaction was initiated |
+
+## Transaction Types
+
+The `bsl:TransactionType` vocabulary gives you a consistent classification across all transaction records, regardless of source system.
+
+| Type | Description |
+|---|---|
+| `bsl:Debit` | A withdrawal or outgoing payment from an account |
+| `bsl:Credit` | A deposit or incoming payment to an account |
+| `bsl:Transfer` | Movement of funds between two accounts |
+| `bsl:FeeCharge` | A fee levied by the institution (e.g., maintenance fee, overdraft fee) |
+| `bsl:InterestPayment` | Interest credited to or debited from an account |
+| `bsl:Reversal` | A cancellation that mirrors and negates a previously posted transaction |
+| `bsl:Adjustment` | A manual correction to a posted transaction amount or attribute |
+
+## AML Flags
+
+The Banking Semantic Layer's compliance engine automatically evaluates every incoming transaction against a set of configurable AML screening rules. When a rule fires, it attaches a `bsl:AMLFlag` value to the transaction. A single transaction can carry multiple flags if it matches more than one rule pattern.
+
+| Flag | Description |
+|---|---|
+| `bsl:CTRRequired` | Transaction meets the threshold for a Currency Transaction Report (typically ≥ $10,000 in the US) |
+| `bsl:SARCandidate` | Transaction exhibits patterns consistent with suspicious activity warranting a Suspicious Activity Report |
+| `bsl:HighRisk` | Transaction involves a high-risk customer, jurisdiction, or counterparty |
+| `bsl:Structuring` | Transaction appears designed to evade CTR thresholds through deliberate structuring (smurfing) |
+| `bsl:UnusualPattern` | Transaction deviates significantly from the customer's established behavioral baseline |
+
+Flagged transactions are surfaced through the compliance dashboard and are also queryable via the SPARQL endpoint (see the example in the [Compliance](/banking/compliance) reference).
+
+## Example: Transaction Record in JSON-LD
+
+The following example shows a card payment transaction serialized as JSON-LD, including an MCC code and an AML flag.
+
+```json
+{
+  "@context": "https://ontology.bankingsl.io/v1/context.json",
+  "@type": "bsl:Transaction",
+  "bsl:transactionId": "TXN-20240315-88421",
+  "bsl:amount": 1250.00,
+  "bsl:currency": "USD",
+  "bsl:timestamp": "2024-03-15T14:32:10Z",
+  "bsl:transactionType": "bsl:Debit",
+  "bsl:direction": "bsl:Debit",
+  "bsl:mccCode": "5411",
+  "bsl:description": "Grocery Store Purchase",
+  "bsl:channel": "bsl:POS",
+  "bsl:debitAccount": {
+    "bsl:accountNumber": "ACC-9987654"
+  },
+  "bsl:amlFlags": []
+}
+```
+
+## Querying Transactions
+
+The example below retrieves all point-of-sale transactions exceeding $500 that were posted after January 1, 2024, ordered by most recent first.
+
+```sparql
+SELECT ?tx ?amount ?timestamp WHERE {
+  ?tx a bsl:Transaction ;
+      bsl:amount ?amount ;
+      bsl:timestamp ?timestamp ;
+      bsl:channel bsl:POS .
+  FILTER(?amount > 500)
+  FILTER(?timestamp > "2024-01-01T00:00:00Z"^^xsd:dateTime)
+} ORDER BY DESC(?timestamp)
+```
+
+You can combine this pattern with account or customer filters to scope the results to a specific customer segment, branch, or product portfolio.
+
+<Tip>
+MCC codes give you a powerful, standardized signal for merchant categorization in spending analytics. By joining `bsl:mccCode` values against the ISO 18245 reference taxonomy, you can segment customer spend into categories such as Groceries (5411), Travel (3000–3999), Restaurants (5812), or Healthcare (8000–8099) without relying on inconsistent free-text descriptions. The Banking Semantic Layer ships with a built-in `bsl:MCCCategory` mapping entity that you can join in your SPARQL queries to surface human-readable category labels alongside transaction data.
+</Tip>

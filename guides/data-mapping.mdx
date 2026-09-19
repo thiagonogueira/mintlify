@@ -1,0 +1,144 @@
+---
+title: "Map Source System Data to the Banking Ontology"
+sidebarTitle: "Data Mapping"
+description: "Connect your core banking, CRM, or data warehouse fields to the Banking Semantic Layer ontology using field-level mapping definitions."
+---
+
+Data mapping is the foundation of the Banking Semantic Layer. Before you can run semantic queries or enrich records, you need to tell the platform how your source system's fields correspond to properties in the banking ontology. A well-defined mapping lets the platform translate raw, system-specific data — with its idiosyncratic field names, coded values, and implicit relationships — into a shared, standardised vocabulary that every downstream consumer can understand.
+
+## Overview
+
+A mapping definition is a JSON document that declares the connection between a source system and the `bsl:` ontology. It specifies which source fields map to which ontology properties, and optionally defines a transform that should be applied during translation — for example, expanding a two-character status code into a fully-qualified taxonomy term. Once a mapping is uploaded and activated, the platform applies it automatically whenever records from that source system are ingested for enrichment.
+
+<Steps>
+  <Step title="Identify your source system">
+    Start by deciding which source system you are mapping and which ontology entity type the records represent. The platform recognises the following built-in source system names:
+
+    | Source System Name | Description |
+    |--------------------|-------------|
+    | `core_banking`     | Core banking platform (accounts, transactions, loans) |
+    | `crm`              | Customer relationship management system |
+    | `data_warehouse`   | Enterprise data warehouse or data lake |
+
+    You also need to choose the target entity type from the ontology — for example, `bsl:Account`, `bsl:Customer`, or `bsl:Transaction`. These entity types are defined in the Banking Semantic Layer ontology specification.
+  </Step>
+
+  <Step title="Create a mapping definition">
+    Write a JSON mapping definition that lists every field you want to map. Each entry in `fieldMappings` pairs a `sourceField` (the column or key name in your source system) with an `ontologyProperty` (the fully-qualified `bsl:` property). Where the source value needs to be transformed before it becomes a valid ontology value, add a `transform` block.
+
+    ```json
+    {
+      "mappingId": "map-001",
+      "sourceSystem": "core_banking",
+      "entityType": "bsl:Account",
+      "fieldMappings": [
+        { "sourceField": "acct_no", "ontologyProperty": "bsl:accountNumber" },
+        {
+          "sourceField": "acct_type_cd",
+          "ontologyProperty": "bsl:accountType",
+          "transform": { "type": "taxonomyLookup", "taxonomy": "bsl:AccountType" }
+        },
+        { "sourceField": "bal_amt", "ontologyProperty": "bsl:balance" },
+        { "sourceField": "ccy_cd", "ontologyProperty": "bsl:currency" },
+        {
+          "sourceField": "status_cd",
+          "ontologyProperty": "bsl:status",
+          "transform": {
+            "type": "valueMap",
+            "map": { "A": "bsl:Active", "D": "bsl:Dormant", "C": "bsl:Closed" }
+          }
+        }
+      ]
+    }
+    ```
+
+    Save this file as `mapping-definition.json` on your local machine before proceeding.
+  </Step>
+
+  <Step title="Upload the mapping">
+    POST the mapping definition to the `/v1/mappings` endpoint. The platform validates the JSON structure, checks that all referenced ontology properties exist, and stores the mapping in a pending state ready for testing.
+
+    ```bash
+    curl -X POST https://api.bankingsemanticlayer.io/v1/mappings \
+      -H "Authorization: Bearer YOUR_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d @mapping-definition.json
+    ```
+
+    A successful response returns the mapping object with a `status` of `"pending"` and a platform-assigned `mappingId` (or confirms your supplied ID if it was unique).
+  </Step>
+
+  <Step title="Test the mapping">
+    Before activating the mapping against live data, use the dry-run test endpoint to verify that your field mappings and transforms behave as expected. Pass one or more representative sample records in the request body. The response shows the translated ontology output without writing anything to the graph.
+
+    ```bash
+    curl -X POST https://api.bankingsemanticlayer.io/v1/mappings/map-001/test \
+      -H "Authorization: Bearer YOUR_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "records": [
+          {
+            "acct_no": "1234567",
+            "acct_type_cd": "SAV",
+            "bal_amt": 5000,
+            "ccy_cd": "USD",
+            "status_cd": "A"
+          }
+        ]
+      }'
+    ```
+
+    Review the `output` array in the response to confirm that each source value has been correctly translated. Any fields that failed to map are listed in a `warnings` array so you can fix them before going live.
+  </Step>
+
+  <Step title="Apply to production data">
+    Once the test results look correct, activate the mapping so it is used for live enrichment. Send a PATCH request to update the mapping's status to `"active"`.
+
+    ```bash
+    curl -X PATCH https://api.bankingsemanticlayer.io/v1/mappings/map-001 \
+      -H "Authorization: Bearer YOUR_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{"status": "active"}'
+    ```
+
+    From this point forward, any enrichment request that references `mappingId: "map-001"` will use this definition to translate your source records into ontology-aligned, enriched output.
+  </Step>
+</Steps>
+
+## Transform Types
+
+The `transform` block on a field mapping controls how the raw source value is converted before it is written to the ontology property. The following transform types are available:
+
+| Transform Type      | Description |
+|---------------------|-------------|
+| `directCopy`        | Copies the source value to the ontology property without modification. This is the default when no `transform` is specified. |
+| `valueMap`          | Translates discrete coded values to their ontology equivalents using an explicit key-value `map` object. |
+| `taxonomyLookup`    | Looks up the source value against a named `bsl:` taxonomy and returns the matching taxonomy term URI. |
+| `dateFormat`        | Parses the source date string using a configurable `inputFormat` and re-serialises it as ISO 8601. |
+| `currencyNormalize` | Resolves a currency code or symbol to the canonical `bsl:Currency` taxonomy term. |
+| `concatenate`       | Joins multiple source fields into a single string using a configurable `separator`. |
+| `split`             | Splits a single source field into an array of values on a configurable `delimiter`, useful for multi-value properties. |
+
+You can chain transforms by providing an ordered `transforms` array instead of a single `transform` object. The platform applies each transform in sequence, passing the output of one step as the input to the next.
+
+## Relationship Mapping
+
+Foreign keys in your source system — such as `customer_id` on an account record — represent relationships between entities. You can map these to semantic relationships in the ontology using the `entityReference` transform type. The platform resolves the foreign key against the target entity's graph node at enrichment time and writes a proper RDF relationship.
+
+```json
+{
+  "sourceField": "customer_id",
+  "ontologyProperty": "bsl:heldBy",
+  "transform": {
+    "type": "entityReference",
+    "targetEntity": "bsl:Customer",
+    "joinProperty": "bsl:customerId"
+  }
+}
+```
+
+In this example, the value of `customer_id` in the source record is used to look up a `bsl:Customer` node whose `bsl:customerId` property matches. If a matching customer node is found in the graph, the account is linked to it via the `bsl:heldBy` property. If no match is found, the platform records an unresolved reference in the enrichment metadata, which you can investigate later.
+
+<Tip>
+  If you prefer a visual interface, the **Mapping Editor** in the Banking Semantic Layer dashboard lets you drag and drop source fields onto ontology properties, configure transforms from dropdown menus, and preview the output side-by-side — all without writing JSON by hand. Use the dashboard to prototype mappings quickly, then export the generated JSON for version control.
+</Tip>

@@ -1,0 +1,220 @@
+---
+title: "Semantic Queries: Query Banking Data with SPARQL"
+sidebarTitle: "Semantic Queries"
+description: "Learn how to query the Banking Semantic Layer using SPARQL — from simple lookups to complex graph traversals and aggregations."
+---
+
+Semantic queries let you ask questions about your banking data in terms of meaning rather than storage structure. Unlike SQL, which requires you to know exactly which tables and columns hold your data, SPARQL queries against the Banking Semantic Layer work with the ontology vocabulary — `bsl:Account`, `bsl:heldBy`, `bsl:balance` — regardless of which underlying source systems contributed the data or how they store it. This means a single query can seamlessly span records ingested from your core banking platform, your CRM, and your data warehouse, all unified under a common semantic model.
+
+<Note>
+  The Banking Semantic Layer supports SPARQL 1.1 in full, including aggregate functions (`COUNT`, `SUM`, `AVG`, `MIN`, `MAX`), subqueries, `OPTIONAL` and `UNION` patterns, `FILTER` expressions, `GROUP BY`, `HAVING`, and property path syntax (`/`, `*`, `+`).
+</Note>
+
+## Query Basics
+
+All queries are submitted as HTTP POST requests to the `/v1/query` endpoint. The request body is a JSON object with a single `sparql` key whose value is your SPARQL query string. The platform executes the query against the live knowledge graph and returns a JSON response containing a `bindings` array — one object per result row.
+
+The base URL for the query endpoint is:
+
+```
+https://api.bankingsemanticlayer.io/v1/query
+```
+
+The `bsl:` prefix is pre-registered on the platform, so you do not need to declare it in your queries. You may declare additional prefixes using standard SPARQL `PREFIX` declarations at the top of your query string.
+
+## Basic Query Structure
+
+Every SPARQL SELECT query follows the same fundamental pattern: you declare the variables you want returned, then describe a graph pattern that those variables must match.
+
+```sparql
+SELECT ?variable WHERE {
+  ?subject predicate ?object .
+}
+```
+
+Variables are prefixed with `?`. Prefixed names like `bsl:Account` refer to ontology terms. Literal values are quoted strings or typed literals. You can chain multiple triple patterns inside the `WHERE {}` block using `.` as a separator, or omit the separator entirely on separate lines.
+
+## Querying with the SDK or REST API
+
+<Tabs>
+  <Tab title="JavaScript SDK">
+    Install the SDK with `npm install @banking-sl/sdk`, then instantiate a client with your API key. The `client.query()` method accepts a SPARQL string and returns a promise that resolves to a result object.
+
+    ```javascript
+    const { BankingSL } = require('@banking-sl/sdk');
+    const client = new BankingSL({ apiKey: process.env.BSL_API_KEY });
+
+    const results = await client.query({
+      sparql: `
+        SELECT ?account ?balance WHERE {
+          ?account a bsl:Account ;
+                   bsl:heldBy ?customer ;
+                   bsl:balance ?balance .
+          ?customer bsl:customerId "CUS-00123" .
+        }
+      `
+    });
+
+    console.log(results.bindings);
+    ```
+  </Tab>
+  <Tab title="Python SDK">
+    Install the SDK with `pip install banking-sl`, then instantiate a client with your API key. The `client.query()` method accepts a SPARQL string and returns a result object with a `bindings` attribute.
+
+    ```python
+    import os
+    from banking_sl import BankingSL
+
+    client = BankingSL(api_key=os.environ['BSL_API_KEY'])
+
+    results = client.query(
+      sparql="""
+        SELECT ?account ?balance WHERE {
+          ?account a bsl:Account ;
+                   bsl:heldBy ?customer ;
+                   bsl:balance ?balance .
+          ?customer bsl:customerId 'CUS-00123' .
+        }
+      """
+    )
+
+    print(results.bindings)
+    ```
+  </Tab>
+  <Tab title="REST API">
+    You can query the platform directly over HTTP without installing an SDK. Encode your SPARQL query as a JSON string value and POST it to the query endpoint.
+
+    ```bash
+    curl -X POST https://api.bankingsemanticlayer.io/v1/query \
+      -H "Authorization: Bearer YOUR_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "sparql": "SELECT ?account ?balance WHERE { ?account a bsl:Account ; bsl:heldBy ?customer ; bsl:balance ?balance . ?customer bsl:customerId \"CUS-00123\" . }"
+      }'
+    ```
+  </Tab>
+</Tabs>
+
+## Common Query Patterns
+
+The following examples cover the most frequently used reporting and analytics scenarios. You can copy these queries directly and adapt the filter values for your own use cases.
+
+<Accordion title="Customer 360: Find all accounts and transactions for a customer">
+  This query retrieves every account held by a given customer, along with all transactions posted to those accounts. The `OPTIONAL` block ensures that accounts with no transactions still appear in the results.
+
+  ```sparql
+  SELECT ?account ?accountType ?balance ?transaction ?amount ?txnDate WHERE {
+    ?customer a bsl:Customer ;
+              bsl:customerId "CUS-00123" .
+    ?account a bsl:Account ;
+             bsl:heldBy ?customer ;
+             bsl:accountType ?accountType ;
+             bsl:balance ?balance .
+    OPTIONAL {
+      ?transaction a bsl:Transaction ;
+                   bsl:postedTo ?account ;
+                   bsl:amount ?amount ;
+                   bsl:transactionDate ?txnDate .
+    }
+  }
+  ORDER BY ?account DESC(?txnDate)
+  ```
+</Accordion>
+
+<Accordion title="Portfolio Summary: Aggregate balances by account type">
+  This query groups all active accounts by their account type and sums the balances in each group, giving you a portfolio-level view of funds under management.
+
+  ```sparql
+  SELECT ?accountType (SUM(?balance) AS ?totalBalance) (COUNT(?account) AS ?accountCount) WHERE {
+    ?account a bsl:Account ;
+             bsl:accountType ?accountType ;
+             bsl:balance ?balance ;
+             bsl:status bsl:Active .
+  }
+  GROUP BY ?accountType
+  ORDER BY DESC(?totalBalance)
+  ```
+</Accordion>
+
+<Accordion title="High-Value Transactions: Filter transactions above a threshold">
+  This query returns all transactions that exceed a specified amount, along with the account and customer details. Adjust the `FILTER` threshold to match your own reporting requirements.
+
+  ```sparql
+  SELECT ?transaction ?amount ?txnDate ?accountNumber ?customerId WHERE {
+    ?transaction a bsl:Transaction ;
+                 bsl:amount ?amount ;
+                 bsl:transactionDate ?txnDate ;
+                 bsl:postedTo ?account .
+    ?account bsl:accountNumber ?accountNumber ;
+             bsl:heldBy ?customer .
+    ?customer bsl:customerId ?customerId .
+    FILTER (?amount > 10000)
+  }
+  ORDER BY DESC(?amount)
+  ```
+</Accordion>
+
+<Accordion title="KYC Expiry Report: Find customers with expiring KYC">
+  This query identifies customers whose KYC documentation expires within the next 30 days, so your compliance team can prioritise outreach.
+
+  ```sparql
+  SELECT ?customerId ?customerName ?kycExpiry WHERE {
+    ?customer a bsl:Customer ;
+              bsl:customerId ?customerId ;
+              bsl:fullName ?customerName ;
+              bsl:kycExpiryDate ?kycExpiry .
+    FILTER (?kycExpiry >= NOW() && ?kycExpiry <= NOW() + "P30D"^^xsd:duration)
+  }
+  ORDER BY ?kycExpiry
+  ```
+</Accordion>
+
+<Accordion title="Product Penetration: Find customers with multiple products">
+  This query counts the number of distinct product types held by each customer and returns those with more than one, useful for cross-sell analysis and relationship profiling.
+
+  ```sparql
+  SELECT ?customerId ?customerName (COUNT(DISTINCT ?productType) AS ?productCount) WHERE {
+    ?customer a bsl:Customer ;
+              bsl:customerId ?customerId ;
+              bsl:fullName ?customerName .
+    ?account a bsl:Account ;
+             bsl:heldBy ?customer ;
+             bsl:accountType ?productType ;
+             bsl:status bsl:Active .
+  }
+  GROUP BY ?customerId ?customerName
+  HAVING (COUNT(DISTINCT ?productType) > 1)
+  ORDER BY DESC(?productCount)
+  ```
+</Accordion>
+
+## Query Response Format
+
+Every successful query returns a JSON object in the SPARQL 1.1 JSON Results Format. The `bindings` array contains one object per result row. Each key in a binding object corresponds to a variable name from your `SELECT` clause, and its value carries a `type` and `value` field.
+
+```json
+{
+  "head": {
+    "vars": ["account", "balance"]
+  },
+  "results": {
+    "bindings": [
+      {
+        "account": { "type": "uri", "value": "https://graph.bankingsl.io/accounts/1234567" },
+        "balance": { "type": "literal", "datatype": "http://www.w3.org/2001/XMLSchema#decimal", "value": "5000" }
+      }
+    ]
+  }
+}
+```
+
+The `type` field will be `"uri"` for ontology resources, `"literal"` for plain or typed literal values, and `"bnode"` for blank nodes. The SDK wrappers unwrap this structure automatically and return plain JavaScript objects or Python dicts, but the raw REST response always follows this format.
+
+## Performance Tips
+
+Query performance on large graphs depends on how precisely you constrain the search space. The following practices will help you get fast, predictable results:
+
+- **Use `LIMIT` and `OFFSET` for pagination.** Never fetch unbounded result sets in production. Add `LIMIT 100 OFFSET 0` to your query and increment `OFFSET` by `LIMIT` on each subsequent call.
+- **Filter early with `FILTER` clauses.** Place `FILTER` expressions as close as possible to the triple patterns that bind the variables they constrain. This allows the query engine to prune branches early.
+- **Use named graphs for multi-tenant queries.** If your deployment uses named graphs to separate tenants or source systems, scope your query with a `FROM NAMED` clause or a `GRAPH ?g { ... }` block to avoid scanning the entire store.
+- **Avoid unbounded property paths in hot queries.** The `*` and `+` property path operators can traverse arbitrarily deep subgraphs. Use them with care in latency-sensitive contexts and prefer bounded paths (`{1,5}`) where the depth is known.

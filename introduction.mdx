@@ -1,0 +1,60 @@
+---
+title: "Banking Semantic Layer: Unified Financial Data Intelligence"
+sidebarTitle: "Introduction"
+description: "Learn what the Banking Semantic Layer is, how it works, and why it eliminates data inconsistencies across financial systems."
+---
+
+The Banking Semantic Layer is a data platform that sits between your source financial systems and the consumers of that data — analytics tools, compliance reports, APIs, and applications. It provides a shared ontological model for banking concepts, so that a "customer" in your core banking system, your CRM, and your data warehouse all resolve to the same canonical definition, with the same fields, the same relationships, and the same classification scheme.
+
+## What Is the Banking Semantic Layer?
+
+Modern financial institutions run dozens of systems — core banking platforms, CRM tools, payment processors, data warehouses, risk engines — each with its own data model. A customer might be a `CUST_ID` in one system, a `clientRef` in another, and a `party_uuid` in a third. An account balance might be stored in cents in one place and as a decimal in another. A transaction category might follow MCC codes in the ledger but use internal product codes in the warehouse.
+
+This fragmentation creates real costs: data engineering teams spend weeks writing bespoke transformation pipelines, BI analysts maintain conflicting definitions in competing dashboards, and compliance teams struggle to produce consistent reports across jurisdictions.
+
+The Banking Semantic Layer solves this by giving you a single place to define what banking concepts mean and how they relate to each other. You define the model once — in the ontology — and every source system maps to it. Downstream consumers query the canonical model, not the raw sources.
+
+## How It Works
+
+The platform is organized around three layers that take you from raw source data to intelligent, queryable financial knowledge.
+
+**Ontology Model → Semantic Mapping → Query & Enrichment API**
+
+The **Ontology Model** is the foundation. It is a formal, machine-readable description of every banking entity (Customer, Account, Transaction, Product), every relationship between them (a Customer *holds* an Account, an Account *has* Transactions), and every taxonomy used to classify them (product families, risk tiers, regulatory categories). The ontology is aligned with FIBO and versioned so you can evolve it without breaking downstream consumers.
+
+The **Semantic Mapping** layer is where you connect your source systems to the ontology. You define a mapping configuration for each source — specifying which source fields correspond to which ontology properties. The mapping layer handles type coercion, unit normalization, and identifier resolution so that data from disparate systems arrives at the ontology layer in a consistent shape.
+
+The **Query & Enrichment API** is the consumer-facing interface. You can submit raw records for enrichment (the platform applies mappings, resolves relationships, and applies taxonomy labels), or you can query the canonical store directly using SPARQL or the high-level fluent API. Either way, you are always working with the same standardized model.
+
+## Key Benefits
+
+<CardGroup cols={2}>
+  <Card title="Single Source of Truth" icon="database" href="/core-concepts#ontology">
+    Every system resolves to the same canonical entity definitions. Eliminate conflicting dashboards, duplicate customer records, and mismatched field names once and for all.
+  </Card>
+  <Card title="Faster Integration" icon="bolt" href="/core-concepts#semantic-mapping">
+    Onboard a new source system in hours instead of weeks. Define a mapping configuration and the platform handles the rest — no bespoke ETL pipelines required.
+  </Card>
+  <Card title="Regulatory Compliance" icon="shield-check" href="/core-concepts#taxonomies">
+    Built-in taxonomies for Basel III, KYC risk tiers, AML categories, and MCC codes mean your data is already labeled for regulatory reporting at enrichment time.
+  </Card>
+  <Card title="Lineage & Audit" icon="timeline" href="/core-concepts#lineage">
+    Every transformation is recorded with full provenance. Auditors and compliance teams can trace any output value back to its source field, mapping version, and enrichment timestamp.
+  </Card>
+</CardGroup>
+
+## Who Uses It
+
+The Banking Semantic Layer is designed for everyone who works with financial data — not just data engineers.
+
+**Data Engineers** use the mapping and enrichment pipeline to replace fragile bespoke ETL jobs with a governed, reusable semantic layer. Onboarding a new source system becomes a configuration task rather than a development project.
+
+**BI Analysts** query the canonical ontology model instead of writing system-specific SQL. They get consistent entity definitions, pre-applied taxonomy labels, and graph-traversal capabilities that flat tables can't provide.
+
+**Compliance Teams** rely on the built-in regulatory taxonomies and full lineage tracking to produce audit-ready reports without manual data reconciliation. The platform's FIBO alignment means outputs map naturally to regulatory reporting schemas.
+
+**Application Developers** use the Query & Enrichment API to build customer-facing features — account aggregation, personalized product recommendations, risk scoring — on top of a stable, well-defined data model instead of raw database schemas that change with every system upgrade.
+
+<Note>
+  The Banking Semantic Layer is aligned with the **Financial Industry Business Ontology (FIBO)**, the industry-standard ontology for financial concepts maintained by the EDM Council. All canonical entity types and predicates are mapped to their FIBO equivalents, making it straightforward to exchange data with counterparties and regulators who use FIBO-based schemas.
+</Note>

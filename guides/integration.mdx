@@ -1,0 +1,158 @@
+---
+title: "Integrate the Banking Semantic Layer with Your Systems"
+sidebarTitle: "Integration"
+description: "Connect the Banking Semantic Layer to your core banking system, data warehouse, or BI tool using REST connectors, webhooks, or streaming pipelines."
+---
+
+The Banking Semantic Layer is designed to fit into your existing architecture rather than replace it. Whether you need synchronous enrichment of individual records, event-driven callbacks when compliance rules fire, scheduled bulk exports to your data warehouse, or real-time streaming enrichment of a high-throughput transaction feed, the platform provides a dedicated integration pattern for each scenario. This guide walks you through each pattern and shows you exactly how to connect your systems.
+
+## Integration Patterns
+
+Choose the pattern — or combination of patterns — that best matches your latency, throughput, and operational requirements.
+
+<CardGroup cols={2}>
+  <Card title="REST API" icon="plug">
+    Point-to-point integration via HTTP. Best for synchronous, request-response workflows where your application needs enriched data immediately — for example, enriching a new account record at creation time and returning the result to the calling service.
+  </Card>
+  <Card title="Webhooks" icon="bolt">
+    Event-driven callbacks on data changes and rule triggers. Best for decoupled architectures where you want the platform to push notifications to your system when something significant happens, such as a compliance rule firing or an async enrichment job completing.
+  </Card>
+  <Card title="Batch Export" icon="database">
+    Scheduled bulk data exports to your data warehouse or data lake. Best for overnight ETL pipelines, regulatory reporting, or feeding BI tools that consume large snapshots of enriched, ontology-aligned data on a regular cadence.
+  </Card>
+  <Card title="Streaming" icon="signal-stream">
+    Real-time Kafka or event stream enrichment. Best for high-throughput transaction processing where every event must be enriched in milliseconds, and where polling or batch approaches introduce unacceptable latency.
+  </Card>
+</CardGroup>
+
+## REST API Integration
+
+The REST API is the simplest way to integrate. Every capability of the platform — mappings, enrichment, queries, exports — is available as an HTTP endpoint. Your application calls the endpoint, receives a response, and processes the result synchronously.
+
+The base URL for all REST API calls is:
+
+```
+https://api.bankingsemanticlayer.io/v1
+```
+
+The API is versioned at the path level. When breaking changes are introduced in a future release, a new version prefix (`/v2`, etc.) is published alongside the existing version, giving you time to migrate without disruption.
+
+The following Node.js snippet shows how to enrich a batch of account records from within your application code:
+
+```javascript
+const axios = require('axios');
+
+async function enrichAccountBatch(accounts) {
+  const response = await axios.post(
+    'https://api.bankingsemanticlayer.io/v1/enrich',
+    {
+      source: 'core_banking',
+      mappingId: 'map-001',
+      records: accounts
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${process.env.BSL_API_KEY}`
+      }
+    }
+  );
+  return response.data;
+}
+```
+
+Pass your raw account objects as the `accounts` array. The function returns the full enrichment response, including the JSON-LD enriched records and any rule violation metadata. Handle HTTP 4xx errors (invalid mapping, missing fields) and 5xx errors (platform faults) with appropriate retry and alerting logic in your application.
+
+## Webhooks
+
+Webhooks let the platform push data to your system rather than requiring you to poll for updates. You register a publicly accessible HTTPS endpoint, specify which events you care about, and the platform delivers a signed POST request to your URL whenever one of those events occurs.
+
+### Registering a Webhook
+
+Register your webhook endpoint with a single API call, specifying the target URL, the list of events to subscribe to, and a shared secret used to verify the signature of incoming requests.
+
+```bash
+curl -X POST https://api.bankingsemanticlayer.io/v1/webhooks \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://your-system.com/webhook/bsl",
+    "events": ["enrichment.completed", "rule.triggered"],
+    "secret": "your-webhook-secret"
+  }'
+```
+
+The available event types are `enrichment.completed` (fires when an async enrichment job finishes), `rule.triggered` (fires when a compliance or business rule is activated during enrichment), and `mapping.failed` (fires when a live mapping encounters a processing error).
+
+### Webhook Payload
+
+When a `rule.triggered` event fires, the platform sends a POST request to your registered URL with the following JSON body:
+
+```json
+{
+  "event": "rule.triggered",
+  "timestamp": "2024-06-01T12:00:00Z",
+  "data": {
+    "ruleId": "rule:AML-001",
+    "entityType": "bsl:Transaction",
+    "entityId": "TXN-99887",
+    "severity": "high",
+    "label": "CTRRequired"
+  }
+}
+```
+
+Your endpoint must return a `200 OK` within 10 seconds. The platform retries unacknowledged deliveries up to five times using exponential back-off before marking the event as failed in your webhook delivery log.
+
+### Verifying Webhook Signatures
+
+Every webhook request includes a `BSL-Signature` header containing an HMAC-SHA256 signature computed from the raw request body and your webhook secret. You must verify this signature before processing the payload to ensure the request genuinely originated from the platform.
+
+```javascript
+const crypto = require('crypto');
+
+function verifyWebhookSignature(rawBody, signatureHeader, secret) {
+  const expected = crypto
+    .createHmac('sha256', secret)
+    .update(rawBody)
+    .digest('hex');
+  const received = signatureHeader.replace('sha256=', '');
+  return crypto.timingSafeEqual(
+    Buffer.from(expected, 'hex'),
+    Buffer.from(received, 'hex')
+  );
+}
+```
+
+Use `crypto.timingSafeEqual` rather than a plain string comparison to prevent timing-based attacks. Reject any request where the signature does not match before passing the payload to your application logic.
+
+## Data Warehouse Integration
+
+For bulk data exports to Snowflake, BigQuery, Redshift, or any other data warehouse, use the `/v1/export` endpoint. You specify the entity type to export, the output format, and an optional `since` timestamp to retrieve only records enriched or updated after that point — enabling incremental loads.
+
+```bash
+curl https://api.bankingsemanticlayer.io/v1/export \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -G \
+  --data-urlencode "entityType=bsl:Transaction" \
+  --data-urlencode "format=parquet" \
+  --data-urlencode "since=2024-01-01T00:00:00Z"
+```
+
+The endpoint returns a redirect to a pre-signed download URL where the export file is available. The following output formats are supported:
+
+| Format     | Description |
+|------------|-------------|
+| `json-ld`  | JSON-LD with full ontology context. Best for downstream RDF tooling or systems that consume linked data natively. |
+| `parquet`  | Apache Parquet columnar format. Best for loading into analytical data warehouses or processing with Spark or Pandas. |
+| `csv`      | Comma-separated values with a flattened column structure. Best for legacy tools that do not support richer formats. |
+| `turtle`   | RDF Turtle serialisation. Best for loading into a triple store or reasoning engine. |
+
+Schedule export jobs from your data pipeline orchestrator (Airflow, dbt, Prefect) by calling this endpoint on a cron schedule and loading the result into your warehouse's staging area using your normal ingestion tooling.
+
+<Note>
+  The Banking Semantic Layer enforces the following default rate limits: **1,000 requests per minute** for enrichment endpoints (`/v1/enrich`) and **100 requests per minute** for query endpoints (`/v1/query`). Export and mapping endpoints are limited to **60 requests per minute**. If your integration requires higher throughput, contact your account team to discuss an Enterprise plan with elevated or custom limits. The platform returns `HTTP 429 Too Many Requests` with a `Retry-After` header when a limit is exceeded.
+</Note>
+
+<Tip>
+  For real-time transaction enrichment at scale — where you need to enrich hundreds of thousands of transactions per minute — use the **Kafka connector** instead of the REST API. The Kafka connector runs as a Kafka Connect sink, consuming raw transaction events from your source topic, enriching them through the same pipeline as the REST API, and publishing the enriched JSON-LD records to a configured output topic. This eliminates per-request HTTP overhead and lets you process events with the full throughput and fault-tolerance guarantees of your Kafka cluster. See the Kafka Connector documentation for setup instructions.
+</Tip>

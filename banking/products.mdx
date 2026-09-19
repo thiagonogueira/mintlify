@@ -1,0 +1,81 @@
+---
+title: "Product Entity: Financial Product Catalog Modeling"
+sidebarTitle: "Products"
+description: "Define and query financial product entities in the Banking Semantic Layer, including deposit products, loans, cards, and investment instruments."
+---
+
+The Banking Semantic Layer models your institution's financial product catalog as a set of structured, queryable entities, giving you a semantic bridge between the products your institution offers and the customers and accounts that consume them. The `bsl:Product` entity acts as the canonical representation of any financial product — from a basic savings account offering to a structured investment instrument — and connects to customers, accounts, and regulatory classifications through a consistent set of typed relationships.
+
+## Product Model
+
+The `bsl:Product` entity describes a financial product as it exists in the product catalog, independent of any specific customer subscription. Think of it as the template: it defines the product's characteristics, pricing parameters, regulatory classification, and issuing institution. When a customer subscribes to a product, the `bsl:subscribedTo` relationship links their `bsl:Customer` entity to the relevant `bsl:Product`, while the resulting `bsl:Account` entity captures the live operational state of that subscription.
+
+## Product Family Taxonomy
+
+The `bsl:ProductFamily` vocabulary organizes products into five top-level families, enabling high-level filtering and reporting across your catalog.
+
+| Family | Description |
+|---|---|
+| `bsl:Deposits` | Deposit-taking products including savings accounts, term deposits, and certificates of deposit |
+| `bsl:Loans` | Lending products such as personal loans, auto loans, and overdraft facilities |
+| `bsl:Cards` | Payment card products including credit cards, debit cards, and prepaid cards |
+| `bsl:Investments` | Investment and wealth management products such as mutual funds, brokerage accounts, and structured products |
+| `bsl:Insurance` | Insurance and protection products offered through the institution or bancassurance partnerships |
+
+## Product Properties
+
+| Property | Type | Required | Description |
+|---|---|---|---|
+| `bsl:productId` | `string` | Yes | Unique product identifier within the catalog |
+| `bsl:productName` | `string` | Yes | Human-readable product name as used in customer-facing materials |
+| `bsl:productFamily` | `bsl:ProductFamily` | Yes | Product family classification from the `bsl:ProductFamily` taxonomy |
+| `bsl:interestRate` | `decimal` | No | Annual interest rate expressed as a decimal (e.g., `0.045` for 4.5%) |
+| `bsl:currency` | `bsl:Currency` | No | Base currency of the product, as an ISO 4217 code |
+| `bsl:minBalance` | `decimal` | No | Minimum balance required to open or maintain the product |
+| `bsl:maxLimit` | `decimal` | No | Maximum credit or loan limit applicable to this product |
+| `bsl:term` | `integer` | No | Product term in months, applicable to fixed-term products such as loans and term deposits |
+| `bsl:issuedBy` | `bsl:Institution` | Yes | The financial institution that issues or administers this product |
+| `bsl:regulatoryCategory` | `bsl:RegulatoryCategory` | No | Regulatory classification (e.g., `bsl:RetailDeposit`, `bsl:ConsumerCredit`) for compliance reporting |
+
+## Example: Product Record in JSON-LD
+
+The following example shows a savings product entry in JSON-LD format, ready for loading into the semantic catalog.
+
+```json
+{
+  "@context": "https://ontology.bankingsl.io/v1/context.json",
+  "@type": "bsl:Product",
+  "bsl:productId": "PRD-SAV-001",
+  "bsl:productName": "Premier Savings Account",
+  "bsl:productFamily": "bsl:Deposits",
+  "bsl:interestRate": 0.045,
+  "bsl:currency": "USD",
+  "bsl:minBalance": 500.00,
+  "bsl:regulatoryCategory": "bsl:RetailDeposit",
+  "bsl:issuedBy": {
+    "@type": "bsl:Institution",
+    "bsl:institutionId": "INST-001",
+    "bsl:institutionName": "First National Bank"
+  }
+}
+```
+
+## Product–Customer Linkage
+
+The `bsl:subscribedTo` property links a `bsl:Customer` entity to one or more `bsl:Product` entities, representing the set of products to which that customer currently has an active relationship. You can traverse this relationship in both directions — finding all products a customer holds, or finding all customers subscribed to a specific product.
+
+The query below retrieves all customers who are subscribed to at least one product in the `bsl:Loans` family, which is a common starting point for credit risk portfolio analysis.
+
+```sparql
+SELECT ?customer ?product WHERE {
+  ?customer a bsl:Customer ;
+            bsl:subscribedTo ?product .
+  ?product bsl:productFamily bsl:Loans .
+}
+```
+
+You can extend this query to include `bsl:interestRate`, `bsl:maxLimit`, or `bsl:riskTier` to build a richer view of your loan portfolio alongside customer risk profiles.
+
+<Info>
+Your product catalog does not need to be manually maintained in the semantic layer. The Banking Semantic Layer ships with integration connectors for major core banking platforms — including Temenos Transact, FIS Modern Banking Platform, and Finastra Fusion — that can automatically sync product definitions on a scheduled or event-driven basis. When a new product is launched or an existing product's terms are updated in your core banking system, the connector propagates those changes to the semantic catalog, keeping `bsl:Product` entities current without manual intervention. See the Integration Connectors guide for setup instructions.
+</Info>

@@ -1,0 +1,94 @@
+---
+title: "Account Entity: Financial Account Modeling"
+sidebarTitle: "Accounts"
+description: "Reference for the bsl:Account entity in the Banking Semantic Layer, covering account types, statuses, balance properties, and branch relationships."
+---
+
+The `bsl:Account` entity represents a financial account held by a customer at a financial institution. Accounts are the central hub of the Banking Semantic Layer's financial data model — they link customers to transactions, products, branches, and compliance records. Every account carries structured metadata about its type, current balance, lifecycle status, and the currency in which it is denominated.
+
+## Account Types
+
+The `bsl:AccountType` taxonomy classifies accounts by their financial purpose. Each account instance must declare exactly one account type, allowing you to filter, aggregate, and report across homogeneous account populations.
+
+| Type | Description |
+|---|---|
+| `bsl:SavingsAccount` | Interest-bearing deposit account intended for long-term saving |
+| `bsl:CheckingAccount` | Demand deposit or current account used for day-to-day transactions |
+| `bsl:CreditAccount` | Revolving credit line with a defined credit limit |
+| `bsl:LoanAccount` | Fixed-term loan account with scheduled repayment installments |
+| `bsl:InvestmentAccount` | Account holding securities, funds, or other investment instruments |
+| `bsl:MortgageAccount` | Mortgage or home loan account secured against real property |
+
+## Account Properties
+
+| Property | Type | Required | Description |
+|---|---|---|---|
+| `bsl:accountNumber` | `string` | Yes | Account number as assigned by the issuing institution |
+| `bsl:accountType` | `bsl:AccountType` | Yes | Account type classification from the `bsl:AccountType` taxonomy |
+| `bsl:balance` | `decimal` | Yes | Current ledger balance at the time of last update |
+| `bsl:availableBalance` | `decimal` | No | Available balance after excluding pending holds and reserved amounts |
+| `bsl:currency` | `bsl:Currency` | Yes | ISO 4217 currency code for the account's base currency |
+| `bsl:status` | `bsl:AccountStatus` | Yes | Current lifecycle status of the account |
+| `bsl:openedDate` | `date` | Yes | Date on which the account was opened |
+| `bsl:closedDate` | `date` | No | Date on which the account was closed; absent if the account remains open |
+| `bsl:heldBy` | `bsl:Customer` | Yes | The customer entity that holds this account |
+| `bsl:locatedAt` | `bsl:Branch` | No | Branch associated with the account for routing and reporting purposes |
+| `bsl:hasTransaction` | `bsl:Transaction` | No | Transactions posted to this account |
+
+## Account Status Values
+
+The `bsl:AccountStatus` vocabulary tracks an account through its full operational lifecycle.
+
+| Status | Description |
+|---|---|
+| `bsl:Active` | The account is open and operating normally |
+| `bsl:Dormant` | The account has had no customer-initiated activity for a defined inactivity period |
+| `bsl:Frozen` | The account has been temporarily restricted, typically by a compliance or legal hold |
+| `bsl:Closed` | The account has been permanently closed |
+| `bsl:PendingApproval` | The account application has been submitted and is awaiting underwriting or compliance approval |
+
+## Example: Account Record in JSON-LD
+
+The following example shows a `bsl:SavingsAccount` record serialized as JSON-LD, linked to the customer `CUS-00123`.
+
+```json
+{
+  "@context": "https://ontology.bankingsl.io/v1/context.json",
+  "@type": "bsl:SavingsAccount",
+  "bsl:accountNumber": "ACC-9987654",
+  "bsl:accountType": "bsl:SavingsAccount",
+  "bsl:balance": 15340.50,
+  "bsl:availableBalance": 15340.50,
+  "bsl:currency": "USD",
+  "bsl:status": "bsl:Active",
+  "bsl:openedDate": "2022-01-10",
+  "bsl:heldBy": {
+    "@type": "bsl:IndividualCustomer",
+    "bsl:customerId": "CUS-00123"
+  }
+}
+```
+
+## Account Aggregation
+
+The Banking Semantic Layer query API lets you aggregate account balances across types, currencies, or customer segments in a single request. The example below groups total balances by account type for a specific customer.
+
+```javascript
+const results = await client.query({
+  sparql: `
+    SELECT ?accountType (SUM(?balance) AS ?totalBalance) WHERE {
+      ?account a bsl:Account ;
+               bsl:heldBy ?customer ;
+               bsl:accountType ?accountType ;
+               bsl:balance ?balance .
+      ?customer bsl:customerId "CUS-00123" .
+    } GROUP BY ?accountType
+  `
+});
+```
+
+The response returns one row per account type, with the summed balance across all accounts of that type belonging to the customer. You can extend this pattern to group by `bsl:currency` or filter on `bsl:status` to exclude closed accounts from the aggregation.
+
+<Note>
+When a customer holds accounts in multiple currencies, `bsl:balance` values are always stored in the account's native currency and are **not** automatically converted to a base currency. To produce cross-currency balance summaries, retrieve the applicable exchange rates from the `bsl:ExchangeRate` entity and apply the conversion within your query logic or application layer. Real-time rate feeds can be configured via the integration connector settings in your workspace.
+</Note>

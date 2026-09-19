@@ -1,0 +1,126 @@
+---
+title: "Compliance Framework: AML, KYC, and Regulatory Modeling"
+sidebarTitle: "Compliance"
+description: "Use the Banking Semantic Layer to enforce AML screening, KYC verification, PSD2 compliance, and GDPR data governance across your financial data."
+---
+
+Compliance is not an afterthought in the Banking Semantic Layer — it is woven into the ontology itself. Every customer, account, transaction, and product entity carries typed properties that map directly to regulatory obligations, and the platform's automated screening engine continuously evaluates your data against configurable compliance rules. This page describes the regulatory frameworks the semantic layer supports, the tools you have for AML monitoring and KYC lifecycle management, and the data governance controls available for GDPR and audit trail requirements.
+
+## Supported Regulatory Frameworks
+
+The Banking Semantic Layer provides native modeling and tooling support for the following regulatory regimes.
+
+<CardGroup cols={2}>
+  <Card title="AML/CFT" icon="shield-halved">
+    Anti-Money Laundering and Counter-Financing of Terrorism. The platform automatically screens transactions against AML rule sets, attaches structured `bsl:AMLFlag` values, and surfaces CTR and SAR candidates for review.
+  </Card>
+  <Card title="KYC" icon="user-check">
+    Know Your Customer. The `bsl:KYCStatus` lifecycle tracks every customer through identity verification stages and gates account access based on verification outcomes.
+  </Card>
+  <Card title="GDPR" icon="lock">
+    General Data Protection Regulation. Field-level masking policies, data retention rules, and a right-to-erasure endpoint protect personal data across all entity types.
+  </Card>
+  <Card title="PSD2" icon="credit-card">
+    Payment Services Directive 2. The semantic layer models Strong Customer Authentication (SCA) events, open banking consent records, and third-party provider (TPP) access grants.
+  </Card>
+  <Card title="Basel III" icon="chart-bar">
+    Basel III Capital and Liquidity Standards. Risk-weighted asset calculations and liquidity coverage ratio inputs are derivable from the account and product data model.
+  </Card>
+  <Card title="MiFID II" icon="chart-line">
+    Markets in Financial Instruments Directive II. Investment product suitability assessments, transaction reporting, and best-execution records are modeled as first-class entities.
+  </Card>
+</CardGroup>
+
+## AML Monitoring
+
+The Banking Semantic Layer's AML engine evaluates every incoming transaction at ingestion time. When a transaction matches a screening rule, the engine attaches one or more `bsl:AMLFlag` values to the transaction entity. These flags are immutable once set and form part of the auditable transaction record.
+
+You can query flagged transactions programmatically using the JavaScript client:
+
+```javascript
+const flagged = await client.query({
+  sparql: `
+    SELECT ?tx ?amount ?flag WHERE {
+      ?tx a bsl:Transaction ;
+          bsl:amount ?amount ;
+          bsl:amlFlags ?flag .
+    }
+  `
+});
+```
+
+The following AML flag types are currently supported:
+
+| Flag | Description |
+|---|---|
+| `bsl:CTRRequired` | Transaction meets the regulatory threshold for a Currency Transaction Report (typically ≥ $10,000) |
+| `bsl:SARCandidate` | Transaction patterns are consistent with suspicious activity; a Suspicious Activity Report should be considered |
+| `bsl:HighRisk` | Transaction involves a high-risk customer, counterparty, or jurisdiction |
+| `bsl:Structuring` | Transaction appears designed to evade CTR reporting thresholds through deliberate structuring |
+| `bsl:UnusualPattern` | Transaction deviates materially from the customer's established behavioral baseline |
+
+You can configure the rule thresholds and sensitivity parameters for each flag type in your workspace's **Compliance Settings** panel, allowing you to tune detection rates to your institution's risk appetite.
+
+## KYC Lifecycle
+
+Every `bsl:Customer` entity carries a `bsl:kycStatus` property that tracks their position in the KYC verification state machine. The valid state transitions are:
+
+<Steps>
+  <Step title="Pending">
+    The customer record has been created but identity verification has not yet been initiated. Accounts in this state are typically restricted to read-only access.
+  </Step>
+  <Step title="InProgress">
+    Identity documents have been submitted and are under active review by the KYC team or an automated verification provider.
+  </Step>
+  <Step title="Verified">
+    All required identity checks have passed. The customer has full access to products and account functionality as permitted by their risk tier.
+  </Step>
+  <Step title="Failed">
+    One or more required checks did not pass. Account access is restricted and a remediation workflow is triggered. The customer may re-submit documents to restart from `InProgress`.
+  </Step>
+  <Step title="Expired">
+    A previously `Verified` KYC record has exceeded its validity period (typically 12 or 24 months depending on risk tier). The customer must complete periodic re-verification. Access may be degraded until renewal is complete.
+  </Step>
+</Steps>
+
+KYC status directly governs account access rules. Customers with a `bsl:kycStatus` of `bsl:Pending`, `bsl:Failed`, or `bsl:Expired` are automatically subject to account-level restrictions defined in your institution's access policy configuration. High-risk customers (`bsl:RiskTier` of `bsl:High` or `bsl:Critical`) are subject to more frequent re-verification cycles regardless of their current status.
+
+## GDPR Compliance
+
+Several `bsl:Customer` properties — including `bsl:fullName`, `bsl:dateOfBirth`, `bsl:taxId`, and `bsl:country` — are designated as PII fields in the ontology. The Banking Semantic Layer enforces field-level data masking on these properties when you include the `X-Data-Policy: masked` header in your API requests.
+
+To retrieve a customer record with PII fields masked, use the following request pattern:
+
+```bash
+curl https://api.bankingsemanticlayer.io/v1/entities/CUS-00123 \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "X-Data-Policy: masked"
+```
+
+When masking is applied, PII fields are replaced with redacted placeholders (e.g., `"bsl:fullName": "***REDACTED***"`) in the response payload. The original values remain stored securely and are accessible only to roles with the `pii:read` permission scope.
+
+<Tabs>
+  <Tab title="Data Retention">
+    You can configure per-entity-type retention periods in your workspace's **Data Governance** settings. When a retention period expires, the platform automatically schedules affected records for purge. Audit metadata (non-PII) is retained separately in accordance with your jurisdiction's financial recordkeeping requirements.
+  </Tab>
+  <Tab title="Right to Erasure">
+    To fulfill a GDPR Article 17 erasure request, call the right-to-erasure endpoint with the customer's identifier. The platform will pseudonymize all PII fields linked to that customer across the entity graph while preserving the structural and financial records required for regulatory retention:
+
+    ```bash
+    curl -X POST https://api.bankingsemanticlayer.io/v1/gdpr/erasure \
+      -H "Authorization: Bearer YOUR_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{"customerId": "CUS-00123", "reason": "Customer request"}'
+    ```
+  </Tab>
+</Tabs>
+
+## Audit Trail
+
+Every semantic transformation applied to an entity — including KYC status updates, AML flag assignments, risk tier changes, and data masking policy applications — is recorded in the platform's immutable lineage tracker. Each audit record captures the entity affected, the property changed, the old and new values, the timestamp, and the identity of the actor (user or automated rule) that triggered the change.
+
+You can query the audit trail via the `/v1/audit` endpoint or export it in structured format for ingestion into your SIEM or compliance reporting system. The lineage tracker is append-only: records cannot be modified or deleted, ensuring that your audit history is tamper-evident and suitable for regulatory examination.
+
+<Warning>
+The Banking Semantic Layer provides powerful tooling to support your compliance program, but it does not constitute legal compliance advice and does not replace certified compliance management systems, qualified compliance officers, or legal counsel. Regulatory obligations vary by jurisdiction, institution type, and product category. You are responsible for ensuring that your configuration of the platform meets the specific requirements applicable to your institution. Always consult qualified legal and compliance professionals before relying on platform outputs for regulatory filings or enforcement decisions.
+</Warning>

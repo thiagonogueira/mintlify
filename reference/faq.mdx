@@ -1,0 +1,154 @@
+---
+title: "Frequently Asked Questions — Banking Semantic Layer"
+sidebarTitle: "FAQ"
+description: "Answers to common questions about the Banking Semantic Layer, including setup, querying, compliance, integration, and performance."
+---
+
+This page answers the most common questions from developers, data engineers, and compliance teams working with the Banking Semantic Layer. If you cannot find the answer you need here, reach out to support at [support@bankingsemanticlayer.io](mailto:support@bankingsemanticlayer.io) or open a ticket from the dashboard.
+
+## Getting Started
+
+<Accordion title="Do I need to know SPARQL to use the Banking Semantic Layer?">
+  No — SPARQL knowledge is not required for most use cases. The platform provides several layers of access:
+
+  - **Pre-built query templates**: Common use cases such as customer 360 views, transaction history, and account summaries are available as ready-to-run templates in the dashboard.
+  - **Visual query builder**: The dashboard includes a point-and-click query builder that generates SPARQL behind the scenes without requiring you to write any query syntax.
+  - **SDK helper methods**: Both the JavaScript and Python SDKs expose high-level methods (e.g., `client.customers.get()`, `client.transactions.search()`) that abstract away the underlying graph query.
+
+  SPARQL is available for advanced users who need full control over query patterns, graph traversals, or federated queries across named graphs. See the [Query API](/api/query) for details.
+</Accordion>
+
+<Accordion title="How long does it take to set up a data mapping?">
+  Setup time depends on the complexity of your source schema:
+
+  - **Simple mappings** (a single entity type with direct field-to-property correspondence) can be created in minutes using the API or the dashboard mapping editor.
+  - **Moderate mappings** (multi-entity types with value transforms, such as status code normalization or date format conversion) typically take between 30 minutes and a few hours.
+  - **Complex mappings** (multiple related entities, custom business rules, derived properties, and cross-system joins) may take a day or more for initial configuration, though the dashboard's mapping wizard significantly reduces that effort.
+
+  You can test any mapping without persisting data by setting `"dryRun": true` in your enrichment request. See the [Enrichment API](/api/enrichment) for details.
+</Accordion>
+
+<Accordion title="Is there a sandbox/test environment?">
+  Yes. A fully isolated sandbox environment is available for testing:
+
+  - **Sandbox base URL**: `https://api-sandbox.bankingsemanticlayer.io/v1`
+  - **Sandbox dashboard**: `https://app-sandbox.bankingsemanticlayer.io`
+
+  You can generate a sandbox API key from the dashboard under **Settings → API Keys** by selecting the **Sandbox** environment. Sandbox data is completely isolated from production — no sandbox records, mappings, or enrichment jobs are visible in or affect your production environment.
+
+  The sandbox mirrors the production API surface, so any integration you build against the sandbox will work in production with a credential swap.
+</Accordion>
+
+## Ontology & Data Model
+
+<Accordion title="Can I extend the ontology with custom properties?">
+  Yes. You can define custom properties in your organization's namespace and attach them to any entity type in the ontology. Custom properties follow the same conventions as built-in properties:
+
+  - They are scoped to your org namespace (e.g., `org:internalSegment`, `org:riskBand`).
+  - They can be typed as strings, numbers, dates, booleans, or references to other entities.
+  - They are included in enrichment output and queryable via SPARQL.
+
+  To register a custom property, use the ontology management endpoints (available on Professional and Enterprise plans). Custom properties are visible only within your organization's named graph and do not affect the shared ontology.
+</Accordion>
+
+<Accordion title="Is the ontology aligned with FIBO?">
+  Yes. The Banking Semantic Layer is aligned with FIBO (Financial Industry Business Ontology), the industry-standard ontology for financial concepts maintained by the EDM Council. Where applicable, the platform reuses FIBO IRIs directly — for example, `bsl:Customer` aligns to `fibo-fnd:Party`, and `bsl:Account` aligns to `fibo-fbc:Account`.
+
+  The `bsl:` namespace extends FIBO with banking-specific operational concepts that FIBO does not cover at the granularity required for day-to-day data engineering, such as transaction enrichment metadata, AML rule results, and MCC taxonomy mappings.
+
+  You can retrieve the FIBO alignment for any entity or property via the `/v1/entities` and `/v1/relationships` endpoints, which include a `fiboAlignment` field in their responses.
+</Accordion>
+
+<Accordion title="How are ontology versions managed?">
+  The Banking Semantic Layer uses semantic versioning for the ontology:
+
+  - The current stable version is embedded in the API base path (e.g., `/v1`).
+  - For fine-grained ontology versioning within an API version, use the `Accept-Version` request header (e.g., `Accept-Version: ontology=2.3.0`).
+  - **Breaking changes** (removal or renaming of properties or entities) are always introduced in a new major API version, with a **12-month deprecation window** for the previous version. Deprecation notices are communicated via the developer changelog and email notifications.
+  - **Additive changes** (new properties, new entity types) may be released within a minor version and are backward compatible.
+
+  You can retrieve the full changelog for any ontology version from the dashboard under **Ontology → Version History**.
+</Accordion>
+
+## Integration & Performance
+
+<Accordion title="What data formats does the enrichment API accept?">
+  The enrichment API accepts records as **JSON arrays** in the request body. Each record is a flat JSON object matching your source schema, which the platform transforms using your configured field mapping.
+
+  Output formats available from the enrichment pipeline:
+
+  | Format | Use Case |
+  |--------|----------|
+  | JSON-LD | Default synchronous response; semantic, self-describing |
+  | Parquet | Bulk export for data warehouse loading |
+  | CSV | Bulk export for spreadsheet and BI tools |
+  | Turtle (RDF) | Bulk export for RDF/SPARQL triple stores |
+
+  Bulk export format is configured when creating an export job via the API. Synchronous enrichment responses always return JSON-LD.
+</Accordion>
+
+<Accordion title="What are the API rate limits?">
+  Default rate limits by endpoint type:
+
+  | Endpoint Type | Limit |
+  |---------------|-------|
+  | Enrichment (`POST /v1/enrich`) | 1,000 requests / minute |
+  | Queries (`POST /v1/query`) | 100 requests / minute |
+  | Bulk export jobs | 10 concurrent jobs |
+  | Entity / relationship reads | 500 requests / minute |
+
+  Rate limit headers are included in every response:
+
+  ```
+  X-RateLimit-Limit: 1000
+  X-RateLimit-Remaining: 847
+  X-RateLimit-Reset: 1717243260
+  ```
+
+  If you exceed a limit, the API returns `429 RATE_LIMITED`. Contact [support@bankingsemanticlayer.io](mailto:support@bankingsemanticlayer.io) to discuss higher limits for your plan.
+</Accordion>
+
+<Accordion title="Can I connect the Banking Semantic Layer to my data warehouse?">
+  Yes. There are several integration paths for loading enriched data into a data warehouse:
+
+  - **Bulk Export API**: Use the export API to pull enriched records in Parquet or CSV format, then load them into Snowflake, BigQuery, Redshift, or any other warehouse that accepts these formats.
+  - **Native Snowflake Connector**: A native Snowflake connector is available that writes enriched records directly to a Snowflake schema using an external stage. Configuration takes approximately 15 minutes.
+  - **Streaming**: An event-based streaming integration via Kafka or AWS Kinesis is available on Enterprise plans for near-real-time enrichment delivery.
+
+  For step-by-step warehouse integration guides, see the **Integrations** section of the documentation.
+</Accordion>
+
+## Compliance & Security
+
+<Accordion title="Does the Banking Semantic Layer store my banking data?">
+  The platform stores the following by default:
+
+  - **Mapping definitions**: Your field mapping configurations are stored in the platform.
+  - **Ontology configurations**: Custom properties, namespaces, and rule definitions are stored.
+  - **Enriched records**: Enriched output is stored in your organization's named graph to support querying via `/v1/query`.
+
+  If you require **ephemeral processing only** (no storage of enriched records), you can enable this mode by setting `"ephemeral": true` in your enrichment request or toggling it in **Settings → Data Retention**. In ephemeral mode, enriched records are returned in the API response and immediately discarded — they are not written to the knowledge graph and cannot be queried later.
+
+  Raw source records submitted for enrichment are processed in memory and are not persisted in any form.
+</Accordion>
+
+<Accordion title="How is sensitive data (PII) handled?">
+  The Banking Semantic Layer provides several controls for protecting personally identifiable information (PII):
+
+  - **Masked responses**: Include the `X-Data-Policy: masked` header in any query or enrichment request to receive masked values for fields tagged as PII in your ontology configuration (e.g., names, account numbers, tax IDs are replaced with `***`).
+  - **Field-level encryption**: Available on Enterprise plans. PII fields can be encrypted at rest using customer-managed keys (CMKs) via AWS KMS or Azure Key Vault.
+  - **Role-based access control (RBAC)**: Available on Professional and Enterprise plans. You can restrict which API key scopes and user roles can read PII fields.
+  - **Data residency**: Enterprise plans support regional data residency (EU, US, APAC) to meet GDPR and local data sovereignty requirements.
+</Accordion>
+
+<Accordion title="Is the platform SOC 2 certified?">
+  Yes. The Banking Semantic Layer is **SOC 2 Type II certified**, covering the Security, Availability, and Confidentiality trust service criteria. The audit period covers a rolling 12-month window.
+
+  Additional compliance posture:
+
+  - **ISO 27001**: Certification is currently in progress, with completion expected in Q4 2024.
+  - **GDPR**: The platform operates as a data processor under GDPR and provides a Data Processing Agreement (DPA) for EU customers.
+  - **PCI DSS**: Cardholder data handling guidance is available for customers processing payment card transactions.
+
+  Contact [sales@bankingsemanticlayer.io](mailto:sales@bankingsemanticlayer.io) to request the SOC 2 report, DPA, or other compliance documentation under NDA.
+</Accordion>
