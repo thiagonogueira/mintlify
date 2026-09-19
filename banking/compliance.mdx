@@ -11,22 +11,22 @@ Compliance is not an afterthought in the Banking Semantic Layer — it is woven 
 The Banking Semantic Layer provides native modeling and tooling support for the following regulatory regimes.
 
 <CardGroup cols={2}>
-  <Card title="AML/CFT" icon="shield-halved">
+  <Card title="AML/CFT" icon="shield-halved" href="#aml-monitoring">
     Anti-Money Laundering and Counter-Financing of Terrorism. The platform automatically screens transactions against AML rule sets, attaches structured `bsl:AMLFlag` values, and surfaces CTR and SAR candidates for review.
   </Card>
-  <Card title="KYC" icon="user-check">
+  <Card title="KYC" icon="user-check" href="#kyc-lifecycle">
     Know Your Customer. The `bsl:KYCStatus` lifecycle tracks every customer through identity verification stages and gates account access based on verification outcomes.
   </Card>
-  <Card title="GDPR" icon="lock">
+  <Card title="GDPR" icon="lock" href="#gdpr-compliance">
     General Data Protection Regulation. Field-level masking policies, data retention rules, and a right-to-erasure endpoint protect personal data across all entity types.
   </Card>
-  <Card title="PSD2" icon="credit-card">
+  <Card title="PSD2" icon="credit-card" href="/banking/transactions">
     Payment Services Directive 2. The semantic layer models Strong Customer Authentication (SCA) events, open banking consent records, and third-party provider (TPP) access grants.
   </Card>
-  <Card title="Basel III" icon="chart-bar">
+  <Card title="Basel III" icon="chart-bar" href="/banking/accounts">
     Basel III Capital and Liquidity Standards. Risk-weighted asset calculations and liquidity coverage ratio inputs are derivable from the account and product data model.
   </Card>
-  <Card title="MiFID II" icon="chart-line">
+  <Card title="MiFID II" icon="chart-line" href="/banking/products">
     Markets in Financial Instruments Directive II. Investment product suitability assessments, transaction reporting, and best-execution records are modeled as first-class entities.
   </Card>
 </CardGroup>
@@ -40,6 +40,8 @@ You can query flagged transactions programmatically using the JavaScript client:
 ```javascript
 const flagged = await client.query({
   sparql: `
+    PREFIX bsl: <https://ontology.bankingsemanticlayer.io/v1/ontology#>
+
     SELECT ?tx ?amount ?flag WHERE {
       ?tx a bsl:Transaction ;
           bsl:amount ?amount ;
@@ -119,7 +121,7 @@ When masking is applied, PII fields are replaced with redacted placeholders (e.g
 
 Every semantic transformation applied to an entity — including KYC status updates, AML flag assignments, risk tier changes, and data masking policy applications — is recorded in the platform's immutable lineage tracker. Each audit record captures the entity affected, the property changed, the old and new values, the timestamp, and the identity of the actor (user or automated rule) that triggered the change.
 
-You can query the audit trail via the `/v1/audit` endpoint or export it in structured format for ingestion into your SIEM or compliance reporting system. The lineage tracker is append-only: records cannot be modified or deleted, ensuring that your audit history is tamper-evident and suitable for regulatory examination.
+You can retrieve the full audit and lineage history for any entity using the `GET /v1/lineage/{entityId}` endpoint, or export it in structured format for ingestion into your SIEM or compliance reporting system. The lineage tracker is append-only: records cannot be modified or deleted, ensuring that your audit history is tamper-evident and suitable for regulatory examination.
 
 <Warning>
 The Banking Semantic Layer provides powerful tooling to support your compliance program, but it does not constitute legal compliance advice and does not replace certified compliance management systems, qualified compliance officers, or legal counsel. Regulatory obligations vary by jurisdiction, institution type, and product category. You are responsible for ensuring that your configuration of the platform meets the specific requirements applicable to your institution. Always consult qualified legal and compliance professionals before relying on platform outputs for regulatory filings or enforcement decisions.

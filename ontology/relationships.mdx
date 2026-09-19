@@ -1,5 +1,5 @@
 ---
-title: "Semantic Relationships Between Banking Entities"
+title: "Semantic Relationships in the Banking Ontology Model"
 sidebarTitle: "Relationships"
 description: "Explore how banking entities connect through semantic predicates — from customer-account ownership to transaction flows and product subscriptions."
 ---
@@ -22,7 +22,18 @@ The following predicates form the essential relationship vocabulary of the ontol
 
 ## Traversing Relationships
 
-You can traverse these relationships using SPARQL queries against the platform's graph endpoint at `https://api.bankingsemanticlayer.io/v1/sparql`. The following examples demonstrate common traversal patterns.
+You can traverse these relationships by executing semantic queries through the `POST /query` endpoint. The API accepts SPARQL SELECT statements scoped to your workspace ontology. The following examples demonstrate common traversal patterns.
+
+Send your SPARQL query as the `sparql` field in the JSON request body:
+
+```bash
+curl -X POST https://api.bankingsemanticlayer.io/v1/query \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sparql": "SELECT ?account ?balance WHERE { ?customer a bsl:Customer ; bsl:customerId \"CUS-00123\" ; bsl:holds ?account . ?account bsl:balance ?balance . }"
+  }'
+```
 
 **Find all accounts held by a specific customer:**
 

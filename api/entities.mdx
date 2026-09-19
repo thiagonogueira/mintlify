@@ -1,7 +1,7 @@
 ---
 title: "Entities API — List and Retrieve Ontology Entity Types"
 sidebarTitle: "Entities API"
-description: "GET /v1/entities and GET /v1/entities/{id} — list canonical entity types, retrieve definitions, properties, and FIBO alignments."
+description: "Use GET /v1/entities and GET /v1/entities/{id} to list canonical entity types, retrieve full definitions, properties, and FIBO alignments."
 ---
 
 The Entities API gives you read access to the canonical entity type definitions in the Banking Semantic Layer ontology. Entity types are the building blocks of the knowledge graph — they represent real-world concepts such as `Customer`, `Account`, `Transaction`, and `Merchant`. Each entity type has a set of properties (attributes), an IRI, and an alignment to the FIBO ontology where applicable. Use these endpoints to explore the data model, drive UI experiences, or validate your field mappings programmatically.
@@ -18,8 +18,8 @@ Returns a paginated list of all canonical entity types available in your organiz
   Number of entity types to return per page. Maximum value is `100`.
 </ParamField>
 
-<ParamField query="offset" type="integer" default="0">
-  Zero-based pagination offset. Use in combination with `limit` to page through results.
+<ParamField query="cursor" type="string">
+  Opaque cursor token for pagination. Obtain this value from `meta.next_cursor` in a previous response. Omit on the first request.
 </ParamField>
 
 <ParamField query="namespace" type="string">
@@ -64,9 +64,8 @@ curl https://api.bankingsemanticlayer.io/v1/entities \
     }
   ],
   "meta": {
-    "total": 18,
     "limit": 20,
-    "offset": 0,
+    "next_cursor": "cur_eyJvZmZzZXQiOjIwfQ",
     "requestId": "req_ent_001",
     "timestamp": "2024-06-01T12:00:00Z"
   }
@@ -250,6 +249,144 @@ curl 'https://api.bankingsemanticlayer.io/v1/entities/bsl%3ACustomer/instances?l
     "limit": 5,
     "next_cursor": "cur_eyJvZmZzZXQiOjV9",
     "requestId": "req_ent_003",
+    "timestamp": "2024-06-01T12:00:00Z"
+  }
+}
+```
+
+---
+
+## GET /v1/taxonomies
+
+Returns a paginated list of all classification taxonomies defined in the Banking Semantic Layer ontology. Taxonomies are hierarchical classification systems used to categorize entity property values consistently across source systems — for example, `bsl:AccountType` classifies accounts as Checking, Savings, or Credit, and `bsl:MerchantCategory` maps MCC codes to spending categories.
+
+**Required scope**: `read:entities`
+
+### Query Parameters
+
+<ParamField query="limit" type="integer" default="20">
+  Number of taxonomies to return per page. Maximum value is `100`.
+</ParamField>
+
+<ParamField query="cursor" type="string">
+  Opaque cursor token for pagination. Obtain from `meta.next_cursor` in a previous response.
+</ParamField>
+
+### Request
+
+```bash
+curl https://api.bankingsemanticlayer.io/v1/taxonomies \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+### Response
+
+```json
+{
+  "data": [
+    {
+      "id": "bsl:AccountType",
+      "label": "Account Type",
+      "description": "Classification of bank account types (e.g., Checking, Savings, Credit)",
+      "termCount": 6
+    },
+    {
+      "id": "bsl:MerchantCategory",
+      "label": "Merchant Category",
+      "description": "Merchant spending categories backed by ISO 18245 MCC codes",
+      "termCount": 412
+    },
+    {
+      "id": "bsl:TransactionType",
+      "label": "Transaction Type",
+      "description": "Classification of transaction types (e.g., Debit, Credit, Transfer, Fee)",
+      "termCount": 12
+    }
+  ],
+  "meta": {
+    "limit": 20,
+    "next_cursor": null,
+    "requestId": "req_tax_001",
+    "timestamp": "2024-06-01T12:00:00Z"
+  }
+}
+```
+
+---
+
+## GET /v1/taxonomies/{id}/terms
+
+Returns all terms within a specific taxonomy. Each term is a leaf concept in the taxonomy hierarchy — the actual classification values that appear in enriched records as ontology IRIs.
+
+**Required scope**: `read:entities`
+
+### Path Parameters
+
+<ParamField path="id" type="string" required>
+  The URL-encoded taxonomy IRI. For example, to retrieve terms for `bsl:AccountType`, pass `bsl%3AAccountType`.
+</ParamField>
+
+### Query Parameters
+
+<ParamField query="limit" type="integer" default="50">
+  Number of terms to return per page. Maximum value is `500`.
+</ParamField>
+
+<ParamField query="cursor" type="string">
+  Opaque cursor token for pagination. Obtain from `meta.next_cursor` in a previous response.
+</ParamField>
+
+### Request
+
+```bash
+curl https://api.bankingsemanticlayer.io/v1/taxonomies/bsl%3AAccountType/terms \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+### Response
+
+<ResponseField name="id" type="string">
+  The IRI of this taxonomy term (e.g., `bsl:Checking`). Use these IRIs as property values in field mappings and enrichment requests.
+</ResponseField>
+
+<ResponseField name="label" type="string">
+  Human-readable display name for the term.
+</ResponseField>
+
+<ResponseField name="description" type="string">
+  A plain-language description of what this term represents.
+</ResponseField>
+
+<ResponseField name="parentId" type="string">
+  The IRI of the parent term in the taxonomy hierarchy, or `null` if this term is a top-level concept.
+</ResponseField>
+
+```json
+{
+  "data": [
+    {
+      "id": "bsl:Checking",
+      "label": "Checking",
+      "description": "A demand deposit account used for everyday transactions",
+      "parentId": null
+    },
+    {
+      "id": "bsl:Savings",
+      "label": "Savings",
+      "description": "An interest-bearing deposit account intended for saving funds",
+      "parentId": null
+    },
+    {
+      "id": "bsl:Credit",
+      "label": "Credit",
+      "description": "A revolving credit account such as a credit card or line of credit",
+      "parentId": null
+    }
+  ],
+  "meta": {
+    "limit": 50,
+    "next_cursor": null,
+    "requestId": "req_tax_002",
     "timestamp": "2024-06-01T12:00:00Z"
   }
 }

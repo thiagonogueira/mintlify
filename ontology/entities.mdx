@@ -1,5 +1,5 @@
 ---
-title: "Ontology Entities: Banking Data Objects Defined"
+title: "Canonical Entity Types in the Banking Semantic Layer"
 sidebarTitle: "Entities"
 description: "Reference for all canonical entity types in the Banking Semantic Layer ontology, including Customer, Account, Transaction, and Product."
 ---
@@ -42,7 +42,7 @@ A `bsl:Customer` represents an individual person or a legal organization that ho
 
 ```json
 {
-  "@context": "https://ontology.bankingsl.io/v1/context.json",
+  "@context": "https://ontology.bankingsemanticlayer.io/v1/context.json",
   "@type": "bsl:Customer",
   "bsl:customerId": "CUS-00123",
   "bsl:fullName": "Jane Smith",
@@ -74,7 +74,7 @@ A `bsl:Account` represents a financial account opened by a customer at your inst
 
 ```json
 {
-  "@context": "https://ontology.bankingsl.io/v1/context.json",
+  "@context": "https://ontology.bankingsemanticlayer.io/v1/context.json",
   "@type": "bsl:Account",
   "bsl:accountNumber": "ACC-9900221",
   "bsl:accountType": "bsl:Savings",
@@ -112,7 +112,7 @@ A `bsl:Transaction` represents a single financial operation applied to one or mo
 
 ```json
 {
-  "@context": "https://ontology.bankingsl.io/v1/context.json",
+  "@context": "https://ontology.bankingsemanticlayer.io/v1/context.json",
   "@type": "bsl:Transaction",
   "bsl:transactionId": "TXN-20240315-884421",
   "bsl:amount": 250.00,
@@ -147,7 +147,7 @@ A `bsl:Product` represents a financial product or service that your institution 
 
 ```json
 {
-  "@context": "https://ontology.bankingsl.io/v1/context.json",
+  "@context": "https://ontology.bankingsemanticlayer.io/v1/context.json",
   "@type": "bsl:Product",
   "bsl:productId": "PRD-SAV-PRIME",
   "bsl:productName": "Prime Savings Account",
@@ -156,3 +156,94 @@ A `bsl:Product` represents a financial product or service that your institution 
   "bsl:currency": "bsl:USD"
 }
 ```
+
+---
+
+## API Reference
+
+Use the Entities API to list all canonical entity types and retrieve the full definition — properties, FIBO alignment, and taxonomy bindings — for any individual entity.
+
+### List All Entity Types
+
+```bash
+GET https://api.bankingsemanticlayer.io/v1/entities
+Authorization: Bearer YOUR_API_KEY
+```
+
+Returns an array of all top-level entity class definitions available in your workspace's active ontology version.
+
+**Example response:**
+
+```json
+{
+  "entities": [
+    {
+      "id": "bsl:Customer",
+      "label": "Customer",
+      "description": "An individual or organization holding a banking relationship",
+      "fiboAlignment": "fibo-fbc:BankCustomer",
+      "propertyCount": 6
+    },
+    {
+      "id": "bsl:Account",
+      "label": "Account",
+      "description": "A financial account held by a customer",
+      "fiboAlignment": "fibo-fbc:Account",
+      "propertyCount": 7
+    },
+    {
+      "id": "bsl:Transaction",
+      "label": "Transaction",
+      "description": "A financial operation against an account",
+      "fiboAlignment": "fibo-fbc:Transaction",
+      "propertyCount": 8
+    },
+    {
+      "id": "bsl:Product",
+      "label": "Product",
+      "description": "A financial product offered by the institution",
+      "fiboAlignment": "fibo-fbc:FinancialProduct",
+      "propertyCount": 5
+    }
+  ]
+}
+```
+
+### Retrieve an Entity Definition
+
+```bash
+GET https://api.bankingsemanticlayer.io/v1/entities/{id}
+Authorization: Bearer YOUR_API_KEY
+```
+
+Replace `{id}` with the entity identifier, such as `bsl:Customer` or `bsl:Transaction`. Returns the full class definition including all declared properties, cardinality constraints, and FIBO alignment metadata.
+
+**Example request:**
+
+```bash
+curl https://api.bankingsemanticlayer.io/v1/entities/bsl:Customer \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+**Example response:**
+
+```json
+{
+  "id": "bsl:Customer",
+  "label": "Customer",
+  "description": "An individual or organization holding a banking relationship",
+  "fiboAlignment": "fibo-fbc:BankCustomer",
+  "properties": [
+    { "id": "bsl:customerId",  "type": "xsd:string",   "required": true  },
+    { "id": "bsl:fullName",    "type": "xsd:string",   "required": true  },
+    { "id": "bsl:dateOfBirth", "type": "xsd:date",     "required": false },
+    { "id": "bsl:kycStatus",   "type": "bsl:KYCStatus","required": true  },
+    { "id": "bsl:riskTier",    "type": "bsl:RiskTier", "required": false },
+    { "id": "bsl:holds",       "type": "bsl:Account",  "required": false }
+  ]
+}
+```
+
+<Tip>
+  You can pin a specific ontology version by appending `?version=2.1` to the request URL, or by sending the `Accept-Version: ontology=2.1` header. Omitting a version specifier resolves to the latest stable version bound to your workspace.
+</Tip>

@@ -43,7 +43,7 @@ The following example shows a savings product entry in JSON-LD format, ready for
 
 ```json
 {
-  "@context": "https://ontology.bankingsl.io/v1/context.json",
+  "@context": "https://ontology.bankingsemanticlayer.io/v1/context.json",
   "@type": "bsl:Product",
   "bsl:productId": "PRD-SAV-001",
   "bsl:productName": "Premier Savings Account",
@@ -67,6 +67,8 @@ The `bsl:subscribedTo` property links a `bsl:Customer` entity to one or more `bs
 The query below retrieves all customers who are subscribed to at least one product in the `bsl:Loans` family, which is a common starting point for credit risk portfolio analysis.
 
 ```sparql
+PREFIX bsl: <https://ontology.bankingsemanticlayer.io/v1/ontology#>
+
 SELECT ?customer ?product WHERE {
   ?customer a bsl:Customer ;
             bsl:subscribedTo ?product .

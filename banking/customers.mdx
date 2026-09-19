@@ -1,5 +1,5 @@
 ---
-title: "Customer Entity: Modeling Banking Relationships"
+title: "Customer Entity: KYC Status and Risk Tier Modeling"
 sidebarTitle: "Customers"
 description: "Learn how the Banking Semantic Layer models customer entities, KYC status, risk tiers, and linked accounts in the financial ontology."
 ---
@@ -58,7 +58,7 @@ The following example shows a fully populated `bsl:IndividualCustomer` record se
 
 ```json
 {
-  "@context": "https://ontology.bankingsl.io/v1/context.json",
+  "@context": "https://ontology.bankingsemanticlayer.io/v1/context.json",
   "@type": "bsl:IndividualCustomer",
   "bsl:customerId": "CUS-00123",
   "bsl:fullName": "Jane Smith",
@@ -75,6 +75,8 @@ The following example shows a fully populated `bsl:IndividualCustomer` record se
 You can use SPARQL queries against the semantic layer to find customers matching specific compliance criteria. The example below retrieves all customers who carry a `bsl:High` risk tier and whose KYC status has either expired or failed — a common input for remediation workflows.
 
 ```sparql
+PREFIX bsl: <https://ontology.bankingsemanticlayer.io/v1/ontology#>
+
 SELECT ?customer ?name ?kycStatus WHERE {
   ?customer a bsl:Customer ;
             bsl:fullName ?name ;

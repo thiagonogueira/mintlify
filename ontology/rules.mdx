@@ -1,7 +1,7 @@
 ---
 title: "Business Rules and Data Governance in the Ontology"
 sidebarTitle: "Rules"
-description: "Define and apply business rules for data validation, compliance checks, and governance policies across your banking ontology."
+description: "Define and apply business rules for data validation, inference, and compliance enforcement across your banking ontology and enrichment pipelines."
 ---
 
 The rules engine is the governance layer of the Banking Semantic Layer. It lets you encode business logic — data quality requirements, inferred classifications, and regulatory thresholds — directly into the ontology so that rules run automatically at enrichment time rather than being scattered across downstream application code. When a record flows through the enrichment pipeline, the engine evaluates every applicable rule against the incoming data, attaches violation flags and derived labels to the enriched output, and surfaces a structured audit trail that your compliance and data quality teams can act on.
@@ -21,7 +21,7 @@ The platform supports three categories of rules, each serving a distinct governa
     - Every `bsl:Customer` with a `bsl:kycStatus` of `bsl:Verified` must have a non-null `bsl:dateOfBirth`. Missing birth dates on verified customers trigger `bsl:IncompleteKYCProfile`.
     - Every `bsl:Account` with `bsl:status` of `bsl:Active` must have a `bsl:openedDate` in the past. Future-dated open dates are flagged with `bsl:InvalidOpenDate`.
 
-    Validation rules run synchronously during enrichment. You can also trigger on-demand validation against an existing dataset via the `/v1/rules/validate` endpoint.
+    Validation rules run synchronously during enrichment. To validate records on demand, submit them to the `POST /enrich` endpoint — the enrichment response includes a `violations` block listing every failed validation rule along with the offending field and rule identifier.
   </Tab>
   <Tab title="Inference Rules">
     Inference rules derive new facts from existing data. Instead of checking for a violation, they assert a new property value or relationship when a defined pattern is matched. Inferred facts are written back to the enriched record as first-class ontology assertions, clearly marked with `bsl:inferredFrom` to distinguish them from source-asserted data.
@@ -76,24 +76,33 @@ All rules — whether built-in or custom — are represented in a consistent JSO
 
 The key fields in a rule definition are:
 
-- **`ruleId`** — A unique, stable identifier for the rule. Prefix custom rules with your own namespace (e.g., `internal:`) to avoid collisions with built-in rules.
+- **`ruleId`** — A unique, stable identifier for the rule. Prefix custom rules with your own namespace identifier (for example, `"org-acme:rule-001"`) to avoid collisions with built-in rules.
 - **`name`** — A human-readable name for the rule, used in dashboards and audit log entries.
 - **`type`** — One of `validation`, `inference`, or `compliance`.
 - **`condition`** — The logical condition that triggers the rule. Supports property comparisons, date arithmetic, pattern matching, and graph traversal predicates.
 - **`action`** — What the platform does when the condition is met: `flag` a violation, `infer` a new label, `alert` a downstream webhook, or `block` a pipeline stage.
 
-## Creating a Rule via API
+## Creating a Rule
 
-You can create custom rules by posting a rule definition to the rules endpoint. Store your rule definition in a local file and reference it with the `@` syntax:
+You can create custom rules directly from the **Settings → Rules → Custom Rules** section of the workspace dashboard, or by importing a rule definition file in the JSON format described above. Once a rule is saved, it takes effect on the next enrichment run — rules are not applied retroactively to records that have already been enriched.
+
+To verify that a new rule behaves as expected before deploying it broadly, pass a representative sample of records through the `POST /enrich` endpoint. The enrichment response includes the full `governance` block — violations, compliance flags, and inferred facts — so you can confirm the rule triggers correctly against your test data:
 
 ```bash
-curl -X POST https://api.bankingsemanticlayer.io/v1/rules \
+curl -X POST https://api.bankingsemanticlayer.io/v1/enrich \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
-  -d @rule-definition.json
+  -d '{
+    "entity": "bsl:Transaction",
+    "record": {
+      "bsl:transactionId": "TXN-20240315-884421",
+      "bsl:amount": 15000,
+      "bsl:currency": "bsl:USD",
+      "bsl:timestamp": "2024-03-15T14:32:00Z",
+      "bsl:transactionType": "bsl:Debit"
+    }
+  }'
 ```
-
-On success, the API returns the created rule object with a server-assigned version number and activation timestamp. Rules take effect on the next enrichment run after creation — they are not applied retroactively to already-enriched records unless you trigger a re-enrichment job via `/v1/enrichment/reprocess`.
 
 ## Pre-built Compliance Rules
 
@@ -130,7 +139,7 @@ Violations and inferred facts appear in the `governance` block of the enrichment
 }
 ```
 
-You can retrieve the full governance history for any entity — including every rule evaluation, its outcome, and the data snapshot it evaluated against — via `GET /v1/entities/{id}/governance`.
+You can trace the full data lineage for any enriched entity — including the enrichment events that applied rule evaluations — via `GET /v1/lineage/{entityId}`. The lineage response records each processing step, the rules that ran, their outcomes, and the source data snapshot evaluated at each stage.
 
 <Note>
   Built-in compliance rules are reviewed and updated quarterly by the Banking Semantic Layer compliance team to reflect changes in regulatory guidance, updated thresholds, and newly applicable regimes. You receive advance notice of rule changes through the **Changelog** in your workspace dashboard, and you can preview upcoming rule versions before they take effect using the `?version=next` query parameter on any rules API endpoint.

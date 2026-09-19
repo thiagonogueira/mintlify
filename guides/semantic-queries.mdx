@@ -1,7 +1,7 @@
 ---
-title: "Semantic Queries: Query Banking Data with SPARQL"
+title: "Query Banking Data Using SPARQL and the Semantic Layer"
 sidebarTitle: "Semantic Queries"
-description: "Learn how to query the Banking Semantic Layer using SPARQL — from simple lookups to complex graph traversals and aggregations."
+description: "Learn how to query the Banking Semantic Layer using SPARQL — from basic lookups to complex graph traversals, aggregations, and compliance reports."
 ---
 
 Semantic queries let you ask questions about your banking data in terms of meaning rather than storage structure. Unlike SQL, which requires you to know exactly which tables and columns hold your data, SPARQL queries against the Banking Semantic Layer work with the ontology vocabulary — `bsl:Account`, `bsl:heldBy`, `bsl:balance` — regardless of which underlying source systems contributed the data or how they store it. This means a single query can seamlessly span records ingested from your core banking platform, your CRM, and your data warehouse, all unified under a common semantic model.
@@ -16,7 +16,7 @@ All queries are submitted as HTTP POST requests to the `/v1/query` endpoint. The
 
 The base URL for the query endpoint is:
 
-```
+```text
 https://api.bankingsemanticlayer.io/v1/query
 ```
 
@@ -73,7 +73,7 @@ Variables are prefixed with `?`. Prefixed names like `bsl:Account` refer to onto
           ?account a bsl:Account ;
                    bsl:heldBy ?customer ;
                    bsl:balance ?balance .
-          ?customer bsl:customerId 'CUS-00123' .
+          ?customer bsl:customerId "CUS-00123" .
         }
       """
     )
@@ -163,7 +163,7 @@ The following examples cover the most frequently used reporting and analytics sc
               bsl:customerId ?customerId ;
               bsl:fullName ?customerName ;
               bsl:kycExpiryDate ?kycExpiry .
-    FILTER (?kycExpiry >= NOW() && ?kycExpiry <= NOW() + "P30D"^^xsd:duration)
+    FILTER (?kycExpiry >= NOW() && ?kycExpiry <= NOW() + "P30D"^^xsd:dayTimeDuration)
   }
   ORDER BY ?kycExpiry
   ```

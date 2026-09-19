@@ -1,5 +1,5 @@
 ---
-title: "Account Entity: Financial Account Modeling"
+title: "Account Entity: Modeling Account Types and Balances"
 sidebarTitle: "Accounts"
 description: "Reference for the bsl:Account entity in the Banking Semantic Layer, covering account types, statuses, balance properties, and branch relationships."
 ---
@@ -53,7 +53,7 @@ The following example shows a `bsl:SavingsAccount` record serialized as JSON-LD,
 
 ```json
 {
-  "@context": "https://ontology.bankingsl.io/v1/context.json",
+  "@context": "https://ontology.bankingsemanticlayer.io/v1/context.json",
   "@type": "bsl:SavingsAccount",
   "bsl:accountNumber": "ACC-9987654",
   "bsl:accountType": "bsl:SavingsAccount",
@@ -76,6 +76,8 @@ The Banking Semantic Layer query API lets you aggregate account balances across 
 ```javascript
 const results = await client.query({
   sparql: `
+    PREFIX bsl: <https://ontology.bankingsemanticlayer.io/v1/ontology#>
+
     SELECT ?accountType (SUM(?balance) AS ?totalBalance) WHERE {
       ?account a bsl:Account ;
                bsl:heldBy ?customer ;

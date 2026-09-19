@@ -1,7 +1,7 @@
 ---
 title: "Relationships API — Semantic Predicates Between Entities"
 sidebarTitle: "Relationships API"
-description: "GET /v1/relationships — list all semantic predicates connecting banking entities, including domain, range, and inverse properties."
+description: "GET /v1/relationships and GET /v1/lineage/{entityId} — list semantic predicates between banking entities, retrieve lineage and audit trails."
 ---
 
 The Relationships API exposes the semantic predicates that connect entity types in the Banking Semantic Layer knowledge graph. A relationship (or predicate) is the edge between two entity nodes — it has a direction, a domain (the entity type at the source), a range (the entity type at the target), and often an inverse predicate representing the same relationship in reverse. Understanding the available relationships is essential for writing SPARQL queries, designing field mappings that link entities across source systems, and building graph traversal logic.
@@ -26,8 +26,8 @@ Returns a paginated list of all semantic predicates defined in the ontology, opt
   Number of predicates to return per page. Maximum value is `100`.
 </ParamField>
 
-<ParamField query="offset" type="integer" default="0">
-  Zero-based pagination offset.
+<ParamField query="cursor" type="string">
+  Opaque cursor token for pagination. Obtain from `meta.next_cursor` in a previous response. Omit on the first request.
 </ParamField>
 
 ### Request
@@ -71,9 +71,8 @@ curl 'https://api.bankingsemanticlayer.io/v1/relationships?domain=bsl%3ACustomer
     }
   ],
   "meta": {
-    "total": 12,
     "limit": 20,
-    "offset": 0,
+    "next_cursor": null,
     "requestId": "req_rel_001",
     "timestamp": "2024-06-01T12:00:00Z"
   }

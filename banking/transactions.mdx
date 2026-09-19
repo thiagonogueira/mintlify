@@ -1,5 +1,5 @@
 ---
-title: "Transaction Entity: Financial Operations Modeling"
+title: "Transaction Entities: Modeling Financial Operations"
 sidebarTitle: "Transactions"
 description: "Explore how the Banking Semantic Layer models financial transactions, including debit/credit flows, MCC codes, AML flags, and transaction type taxonomies."
 ---
@@ -63,7 +63,7 @@ The following example shows a card payment transaction serialized as JSON-LD, in
 
 ```json
 {
-  "@context": "https://ontology.bankingsl.io/v1/context.json",
+  "@context": "https://ontology.bankingsemanticlayer.io/v1/context.json",
   "@type": "bsl:Transaction",
   "bsl:transactionId": "TXN-20240315-88421",
   "bsl:amount": 1250.00,
@@ -86,6 +86,9 @@ The following example shows a card payment transaction serialized as JSON-LD, in
 The example below retrieves all point-of-sale transactions exceeding $500 that were posted after January 1, 2024, ordered by most recent first.
 
 ```sparql
+PREFIX bsl: <https://ontology.bankingsemanticlayer.io/v1/ontology#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
 SELECT ?tx ?amount ?timestamp WHERE {
   ?tx a bsl:Transaction ;
       bsl:amount ?amount ;

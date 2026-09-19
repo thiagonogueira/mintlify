@@ -1,5 +1,5 @@
 ---
-title: "Taxonomy Management for Banking Classifications"
+title: "Classification Taxonomies in the Banking Semantic Layer"
 sidebarTitle: "Taxonomies"
 description: "Manage hierarchical classification taxonomies for banking data: risk tiers, product families, MCC codes, regulatory categories, and KYC status."
 ---
@@ -63,6 +63,95 @@ bsl:AccountType
 ```
 
 When you filter for `bsl:DepositAccount` in a query, the platform automatically expands the filter to include all narrower terms in the hierarchy. You can disable this behavior and query only the exact term by appending `?exact=true` to taxonomy filter parameters.
+
+## API Reference
+
+Use the Taxonomies API to list all available vocabularies in your workspace and to retrieve the terms within any individual taxonomy. These endpoints are useful for building dynamic form controls, populating filter options, and validating enumerated values in your integration pipelines.
+
+### List All Taxonomies
+
+```bash
+GET https://api.bankingsemanticlayer.io/v1/taxonomies
+Authorization: Bearer YOUR_API_KEY
+```
+
+Returns all taxonomies — both built-in and custom — available in your workspace.
+
+**Example response:**
+
+```json
+{
+  "taxonomies": [
+    {
+      "id": "bsl:AccountType",
+      "label": "Account Types",
+      "termCount": 12,
+      "builtin": true
+    },
+    {
+      "id": "bsl:KYCStatus",
+      "label": "KYC Status",
+      "termCount": 5,
+      "builtin": true
+    },
+    {
+      "id": "bsl:RiskTier",
+      "label": "Risk Tiers",
+      "termCount": 4,
+      "builtin": true
+    }
+  ]
+}
+```
+
+### List Terms Within a Taxonomy
+
+```bash
+GET https://api.bankingsemanticlayer.io/v1/taxonomies/{id}/terms
+Authorization: Bearer YOUR_API_KEY
+```
+
+Replace `{id}` with the taxonomy identifier, such as `bsl:AccountType` or `bsl:KYCStatus`. Returns all terms in the taxonomy, including their hierarchy, labels, and definitions.
+
+**Example request:**
+
+```bash
+curl "https://api.bankingsemanticlayer.io/v1/taxonomies/bsl:AccountType/terms" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+**Example response:**
+
+```json
+{
+  "taxonomyId": "bsl:AccountType",
+  "label": "Account Types",
+  "terms": [
+    {
+      "id": "bsl:DepositAccount",
+      "label": "Deposit Account",
+      "broader": null,
+      "definition": "An account used to hold deposited funds at a regulated institution."
+    },
+    {
+      "id": "bsl:SavingsAccount",
+      "label": "Savings Account",
+      "broader": "bsl:DepositAccount",
+      "definition": "An interest-bearing deposit account offering liquidity and deposit insurance coverage."
+    },
+    {
+      "id": "bsl:CheckingAccount",
+      "label": "Checking Account",
+      "broader": "bsl:DepositAccount",
+      "definition": "A transactional deposit account used for day-to-day payments and withdrawals."
+    }
+  ]
+}
+```
+
+<Tip>
+  Append `?exact=true` to a taxonomy terms request to retrieve only the direct children of a given term without recursively expanding the full hierarchy. This is useful when building paginated navigation of deep taxonomy trees.
+</Tip>
 
 ## Custom Taxonomies
 

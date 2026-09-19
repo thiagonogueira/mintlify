@@ -1,7 +1,7 @@
 ---
-title: "Get Started with the Banking Semantic Layer"
+title: "Banking Semantic Layer Quickstart: First Query in 10 Min"
 sidebarTitle: "Quickstart"
-description: "Set up your API key, make your first semantic query, and map banking data to the ontology in under 10 minutes."
+description: "Set up your API key, install the SDK, make your first semantic query, and enrich a banking record against the ontology in under 10 minutes."
 ---
 
 This guide walks you through everything you need to go from a blank slate to a working semantic query against real banking data. By the end you will have your API key configured, the SDK installed, a source record enriched through the ontology, and a SPARQL query returning filtered results — all in under 10 minutes.
@@ -57,6 +57,7 @@ This guide walks you through everything you need to go from a blank slate to a w
       ```
 
       ```python Python
+      import os
       from banking_sl import BankingSL
 
       client = BankingSL(api_key=os.environ["BANKING_SL_API_KEY"])
@@ -111,6 +112,7 @@ This guide walks you through everything you need to go from a blank slate to a w
       ```
 
       ```python Python
+      import os
       from banking_sl import BankingSL
 
       client = BankingSL(api_key=os.environ["BANKING_SL_API_KEY"])
@@ -180,6 +182,7 @@ This guide walks you through everything you need to go from a blank slate to a w
       ```
 
       ```python Python
+      import os
       from banking_sl import BankingSL
 
       client = BankingSL(api_key=os.environ["BANKING_SL_API_KEY"])

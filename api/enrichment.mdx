@@ -268,3 +268,90 @@ Common validation failure reasons:
 - A numeric value falls outside the allowed range defined by a business rule.
 
 To diagnose mapping issues without affecting production data, use `"dryRun": true` while iterating on your mapping configuration.
+
+---
+
+## POST /v1/mappings
+
+Creates a new field mapping configuration that defines how source record fields translate to ontology properties and taxonomy IRIs. Mappings are referenced by ID in every enrichment request via the `mappingId` parameter.
+
+**Required scope**: `write:mappings`
+
+### Request Body
+
+<ParamField body="name" type="string" required>
+  A descriptive name for the mapping configuration (e.g., `core-banking-accounts-v2`). Must be unique within your organization.
+</ParamField>
+
+<ParamField body="sourceSystem" type="string" required>
+  An identifier for the source system this mapping is designed for (e.g., `core_banking`, `card_processing`). This value should match the `source` field you use in enrichment requests.
+</ParamField>
+
+<ParamField body="targetEntityType" type="string" required>
+  The IRI of the entity type this mapping produces (e.g., `bsl:Account`, `bsl:Customer`, `bsl:Transaction`).
+</ParamField>
+
+<ParamField body="fieldMappings" type="array" required>
+  An array of field mapping objects, each describing how one source field maps to an ontology property.
+
+  Each object requires:
+  - `sourceField` (string) — the field name as it appears in your raw source records.
+  - `targetProperty` (string) — the ontology property IRI to map to (e.g., `bsl:accountNumber`).
+  - `transform` (string, optional) — a named transform to apply: `toString`, `toDecimal`, `toDate`, `toUpperCase`, `trim`, or a taxonomy lookup such as `bsl:AccountType`.
+</ParamField>
+
+<ParamField body="description" type="string">
+  Optional free-text description of the mapping's purpose and source system context.
+</ParamField>
+
+### Request
+
+```bash
+curl -X POST https://api.bankingsemanticlayer.io/v1/mappings \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "core-banking-accounts-v2",
+    "sourceSystem": "core_banking",
+    "targetEntityType": "bsl:Account",
+    "description": "Maps core banking account export fields to bsl:Account properties",
+    "fieldMappings": [
+      { "sourceField": "acct_no",    "targetProperty": "bsl:accountNumber" },
+      { "sourceField": "bal_amt",    "targetProperty": "bsl:balance",   "transform": "toDecimal" },
+      { "sourceField": "ccy_cd",     "targetProperty": "bsl:currency",  "transform": "bsl:CurrencyCode" },
+      { "sourceField": "status_cd",  "targetProperty": "bsl:status",    "transform": "bsl:AccountStatus" },
+      { "sourceField": "customer_id","targetProperty": "bsl:heldBy" }
+    ]
+  }'
+```
+
+### Response
+
+```json
+{
+  "data": {
+    "id": "map-001",
+    "name": "core-banking-accounts-v2",
+    "sourceSystem": "core_banking",
+    "targetEntityType": "bsl:Account",
+    "description": "Maps core banking account export fields to bsl:Account properties",
+    "fieldMappings": [
+      { "sourceField": "acct_no",    "targetProperty": "bsl:accountNumber", "transform": null },
+      { "sourceField": "bal_amt",    "targetProperty": "bsl:balance",       "transform": "toDecimal" },
+      { "sourceField": "ccy_cd",     "targetProperty": "bsl:currency",      "transform": "bsl:CurrencyCode" },
+      { "sourceField": "status_cd",  "targetProperty": "bsl:status",        "transform": "bsl:AccountStatus" },
+      { "sourceField": "customer_id","targetProperty": "bsl:heldBy",        "transform": null }
+    ],
+    "createdAt": "2024-06-01T12:00:00Z",
+    "updatedAt": "2024-06-01T12:00:00Z"
+  },
+  "meta": {
+    "requestId": "req_map_001",
+    "timestamp": "2024-06-01T12:00:00Z"
+  }
+}
+```
+
+<Tip>
+  Use `"dryRun": true` in a subsequent `POST /v1/enrich` call to validate a newly created mapping against real records before committing to production enrichment runs.
+</Tip>
